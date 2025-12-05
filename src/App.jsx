@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Lock, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone } from 'lucide-react';
+import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Lock, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, ZoomIn, ZoomOut } from 'lucide-react';
 
 /**
  * IF Studio - Advanced Halftone & Spiral Image Engine
- * v9.5 - Added Advertisement Space Layout.
+ * v10.0 - UX Overhaul: Floating Toolbar, Keyboard Shortcuts & Touch Optimization.
  */
 
 // --- Constants ---
@@ -156,6 +156,20 @@ const StatusToast = ({ toast, onClose }) => {
     )
 }
 
+const QuickActionButton = ({ onClick, icon: Icon, title, active }) => (
+    <button
+        onClick={onClick}
+        className={`p-3 rounded-full shadow-lg transition-all active:scale-90 flex items-center justify-center
+            ${active 
+                ? 'bg-[#3B82F6] text-white ring-2 ring-blue-200' 
+                : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'
+            }`}
+        title={title}
+    >
+        <Icon size={20} />
+    </button>
+);
+
 // --- Helper Functions ---
 const hexToRgb = (hex) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -221,6 +235,29 @@ export default function IFStudio() {
       if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
+  // KEYBOARD SHORTCUTS
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+        // Don't trigger if typing in input
+        if (e.target.tagName === 'INPUT') return;
+
+        switch(e.key) {
+            case 'ArrowUp': setPanY(p => Math.max(0, p - 5)); break;
+            case 'ArrowDown': setPanY(p => Math.min(100, p + 5)); break;
+            case 'ArrowLeft': setPanX(p => Math.max(0, p - 5)); break;
+            case 'ArrowRight': setPanX(p => Math.min(100, p + 5)); break;
+            case '+': case '=': setScale(s => Math.min(3.0, s + 0.1)); break;
+            case '-': setScale(s => Math.max(0.5, s - 0.1)); break;
+            case 'r': case 'R': resetView(); break;
+            case 'c': case 'C': setCompareMode(prev => !prev); break;
+            case 'Enter': if(step==='crop') setStep('edit'); break;
+        }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [step]);
+
   const showToast = (msg, type = 'info') => {
       setToast({ message: msg, type });
       if (type !== 'error') {
@@ -230,6 +267,7 @@ export default function IFStudio() {
 
   const resetView = () => {
       setPanX(50); setPanY(50); setScale(1); setCenterHole(0);
+      showToast("View Reset");
   };
 
   const resetPatternSettings = () => {
@@ -237,6 +275,7 @@ export default function IFStudio() {
       setLineThickness(0.5);
       setRotation(0);
       if (mode === 'dots') setDotShape('circle');
+      showToast("Pattern Settings Reset");
   };
 
   const handleImageUpload = (e) => {
@@ -1019,6 +1058,18 @@ export default function IFStudio() {
                     <span className="font-bold text-sm tracking-wide">Upload Photo</span>
                     <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                 </label>
+                
+                {/* Floating Toolbar - Desktop & Mobile */}
+                <div className="absolute bottom-32 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur-md p-2 rounded-2xl shadow-2xl border border-gray-100 flex items-center gap-2 transition-all hover:scale-105 z-50">
+                     <QuickActionButton onClick={() => setScale(s => Math.max(0.5, s - 0.1))} icon={ZoomOut} title="Zoom Out" />
+                     <QuickActionButton onClick={() => setScale(s => Math.min(3.0, s + 0.1))} icon={ZoomIn} title="Zoom In" />
+                     <div className="w-px h-6 bg-gray-200 mx-1"></div>
+                     <QuickActionButton onClick={resetView} icon={RotateCcw} title="Reset View" />
+                     <QuickActionButton onClick={() => setCompareMode(!compareMode)} icon={compareMode ? Eye : EyeOff} title="Compare" active={compareMode} />
+                     <div className="w-px h-6 bg-gray-200 mx-1"></div>
+                     <QuickActionButton onClick={downloadPNG} icon={Download} title="Quick Download" />
+                </div>
+
                 <div className="flex gap-3">
                     <button onClick={downloadSVG} disabled={!imageSrc} className="flex-1 flex items-center justify-center py-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-200 disabled:opacity-50"><Download size={18} className="mr-2" />SVG</button>
                     <button onClick={downloadPNG} disabled={!imageSrc} className="flex-1 flex items-center justify-center py-4 bg-white hover:bg-gray-50 text-gray-700 rounded-xl font-bold text-sm border border-gray-200 shadow-sm disabled:opacity-50"><Download size={18} className="mr-2" />PNG</button>
@@ -1065,18 +1116,6 @@ export default function IFStudio() {
                 {/* Edit Step Overlay UI */}
                 {step === 'edit' && (
                     <>
-                        {/* Compare Button */}
-                        <button 
-                            className="absolute top-4 right-4 bg-white hover:bg-gray-50 text-gray-600 p-3 rounded-full border border-gray-200 shadow-lg transition-all active:scale-95 z-50 group"
-                            onMouseDown={() => setCompareMode(true)}
-                            onMouseUp={() => setCompareMode(false)}
-                            onTouchStart={() => setCompareMode(true)}
-                            onTouchEnd={() => setCompareMode(false)}
-                            title="Hold to Compare"
-                        >
-                            {compareMode ? <Eye size={20} /> : <EyeOff size={20} />}
-                            <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-gray-800 text-white px-2 py-1 rounded text-xs opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity pointer-events-none">Hold to Compare</span>
-                        </button>
                         {/* Lock Icon */}
                         <div className="absolute top-4 left-4 bg-white/50 text-gray-400 p-2 rounded-full border border-gray-100" title="Image Position Locked"><Lock size={16} /></div>
                     </>
