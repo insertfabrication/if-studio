@@ -1319,6 +1319,10 @@ export default function IFStudio() {
           <button onClick={applyCropAndGoToEdit} className="w-full py-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">Apply Crop <ArrowRight size={18} /></button>
       </div>
   );
+    
+  // Dynamic padding calculation for the canvas area on mobile
+  const isMobileDrawerOpen = window.innerWidth < 768 && (activeTab || activeCropTab);
+  const mobileCanvasPadding = isMobileDrawerOpen ? 'pb-64' : 'pb-16'; // pb-64 (256px) is a safe push-up for max-h-[40vh] + nav bar
 
   return (
     <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }}>
@@ -1392,9 +1396,9 @@ export default function IFStudio() {
         )}
       </div>
 
-      {/* CANVAS AREA */}
+      {/* CANVAS AREA - Dynamic Padding added here to prevent overlap */}
       <div 
-        className="flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0"
+        className={`flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0 ${isMobileDrawerOpen ? mobileCanvasPadding : 'pb-16 md:pb-0'}`}
         ref={containerRef}
       >
         {/* Main Content */}
@@ -1450,9 +1454,9 @@ export default function IFStudio() {
             )}
         </div>
 
-      {/* Mobile Bottom Navigation (Edit/Upload Modes) - NOW ALWAYS VISIBLE UNLESS CROPPING */}
+      {/* Mobile Bottom Navigation (Edit/Upload Modes) - FIXED BOTTOM */}
       {step !== 'crop' && (
-          <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
               {/* Drawer Content - ONLY SHOW IF imageSrc AND activeTab (in edit mode) */}
               {imageSrc && activeTab && step === 'edit' && (
                   <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[40vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
@@ -1473,14 +1477,14 @@ export default function IFStudio() {
           </div>
       )}
           
-      {/* Mobile Bottom Navigation (Crop Mode Only) - New, cleaner UI */}
+      {/* Mobile Bottom Navigation (Crop Mode Only) - FIXED BOTTOM */}
       {step === 'crop' && (
-           <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
+           <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
               {activeCropTab && (
                   <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[40vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
                        <div className="flex justify-between items-center mb-3">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeCropTab} controls</span>
-                            <button onClick={() => setActiveCropTab(null)} className="p-1 text-gray-400 hover:text-gray-600"><X size={14}/></button>
+                            {/* Removed close icon (X) as requested */}
                        </div>
                        {renderMobileCropControls(activeCropTab)}
                   </div>
