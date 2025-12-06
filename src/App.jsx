@@ -1366,10 +1366,11 @@ export default function IFStudio() {
                 <p className="text-[10px] text-gray-400 flex items-center justify-center gap-1 mt-4"><ShieldCheck size={12} /> 100% Private. Processed locally.</p>
             </div>
             ) : (
-            <div className="relative shadow-2xl border border-gray-200 max-w-full max-h-full w-full h-full flex items-center justify-center bg-white/0">
+            <div className="absolute top-[5px] left-[5px] right-[5px] bottom-[5px] shadow-2xl border border-gray-200 bg-white/0">
                 <canvas 
                     ref={canvasRef} 
-                    className="max-w-full max-h-full object-contain" 
+                    // Canvas must fill the new absolute container entirely. object-contain keeps the aspect ratio of the drawing within the physical canvas element's bounds.
+                    className="w-full h-full object-contain" 
                 />
                 
                 {/* Mobile Crop UI - STICKY BOTTOM */}
