@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle } from 'lucide-react';
+import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves } from 'lucide-react';
 
 /**
  * IF Studio - Advanced Halftone & Spiral Image Engine By Insert Fabrication
- * v1
+ * v3.1 - Added Flow Field / Directional Hatching
  */
 
 // --- Constants ---
@@ -15,10 +15,43 @@ const DEFAULT_PATTERN_SETTINGS = {
     dotShape: 'circle'
 };
 const DEFAULT_MIN_THICKNESS = 0.32;
-// Define fixed heights for UI elements on mobile (in pixels for calculations)
+
+// CMYK Configuration
+const CMYK_ANGLES = {
+    c: 15,
+    m: 75,
+    y: 0,
+    k: 45
+};
+
+const CMYK_COLORS = {
+    c: '#00FFFF',
+    m: '#FF00FF',
+    y: '#FFFF00',
+    k: '#000000'
+};
+
+// Curated Presets
+const PRESETS = [
+    { id: 'default', label: 'Default Spiral', icon: Disc, settings: { mode: 'spiral', colorMode: 'mono', rings: 60, thickness: 0.5, rotation: 0, contrast: 1.0, brightness: 0, borderWidth: 0 } },
+    { id: 'flow-sketch', label: 'Contour Sketch', icon: Waves, settings: { mode: 'flow', colorMode: 'mono', rings: 80, thickness: 0.8, rotation: 0, contrast: 1.5, brightness: 10, borderWidth: 0 } },
+    { id: 'cmyk-spiral', label: 'CMYK Spiral', icon: Palette, settings: { mode: 'spiral', colorMode: 'cmyk', rings: 50, thickness: 0.5, rotation: 0, contrast: 1.1, brightness: 5, borderWidth: 0 } },
+    { id: 'stipple-fine', label: 'Fine Stipple', icon: Sparkles, settings: { mode: 'stipple', colorMode: 'mono', rings: 250, thickness: 0.4, rotation: 0, contrast: 1.1, brightness: 5, borderWidth: 0 } },
+    { id: 'woodcut', label: 'Woodcut', icon: Layers, settings: { mode: 'lines', colorMode: 'mono', rings: 50, thickness: 0.6, rotation: 90, contrast: 1.4, brightness: -5, borderWidth: 1.5 } },
+];
+
+// Define fixed heights for UI elements on mobile
 const MOBILE_HEADER_HEIGHT = 48; // h-12
 const MOBILE_NAV_HEIGHT = 56;    // h-14 (edit mode) or h-16 (crop mode)
 const MOBILE_DRAWER_HEIGHT = '40vh'; // max-h-[40vh]
+
+// --- Helper: Pseudo-Random Number Generator ---
+const seededRandom = (seed) => {
+    let t = seed + 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
 
 // --- Components ---
 
@@ -41,7 +74,6 @@ const Slider = ({ label, value, min, max, step, onChange, icon: Icon, highlight,
         {tooltip && <Tooltip text={tooltip} />}
         {onReset && (
             <button
-                // FIX: Pass the settingKey along with the resetValue
                 onClick={() => onReset(settingKey, resetValue)}
                 className="p-0.5 ml-1 rounded-full text-gray-300 hover:text-blue-500 transition-colors duration-150 transform hover:rotate-180 disabled:opacity-0"
                 disabled={value === resetValue}
@@ -73,14 +105,14 @@ const Slider = ({ label, value, min, max, step, onChange, icon: Icon, highlight,
       <style>{`
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            height: 16px; /* Increased size for touch */
+            height: 16px;
             width: 16px;
             border-radius: 50%;
             background: #ffffff;
-            border: 3px solid #3B82F6; /* Increased border for visibility */
+            border: 3px solid #3B82F6;
             cursor: pointer;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            transition: all 0.1s ease-out; /* Added transition */
+            transition: all 0.1s ease-out;
             margin-top: 0px; 
         }
         input[type=range]::-webkit-slider-thumb:active {
@@ -110,7 +142,7 @@ const ModeButton = ({ active, onClick, icon: Icon, label }) => (
     onClick={onClick}
     className={`flex-1 flex flex-col items-center justify-center py-2 px-1 md:py-3 md:px-2 rounded-xl transition-all duration-200 active:scale-95 hover:scale-[1.02] hover:shadow-md ${
       active
-        ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-lg ring-1 ring-blue-300' // Enhanced active style
+        ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-lg ring-1 ring-blue-300'
         : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-500'
     }`}
   >
@@ -228,7 +260,7 @@ const AboutModal = ({ isOpen, onClose }) => {
                     <p>Designed and maintained by IF Studio as an independent creative project.</p>
                     <p>Every feature is built with the goal of helping makers turn ideas into visuals quickly.</p>
                     <div className="pt-2">
-                         <p className="font-bold text-blue-600">Contact: insertfabrication@gmail.com</p>
+                          <p className="font-bold text-blue-600">Contact: insertfabrication@gmail.com</p>
                     </div>
                 </div>
              </div>
@@ -256,6 +288,7 @@ export default function IFStudio() {
   const [toast, setToast] = useState({ message: null, type: 'info' });
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showAbout, setShowAbout] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false); // New state for drag visual
     
   // Mobile Navigation State
   const [activeTab, setActiveTab] = useState('pattern'); 
@@ -274,8 +307,14 @@ export default function IFStudio() {
   const [modeSettings, setModeSettings] = useState({
       spiral: DEFAULT_PATTERN_SETTINGS,
       lines:  DEFAULT_PATTERN_SETTINGS,
-      dots:   DEFAULT_PATTERN_SETTINGS
+      dots:   DEFAULT_PATTERN_SETTINGS,
+      stipple: { ...DEFAULT_PATTERN_SETTINGS, rings: 150 }, // Default higher density for stipple
+      flow: { ...DEFAULT_PATTERN_SETTINGS, rings: 80, thickness: 0.8 } // Default flow settings
   });
+
+  // NEW: Color Engine State
+  const [colorMode, setColorMode] = useState('mono'); // 'mono' or 'cmyk'
+  const [activeLayers, setActiveLayers] = useState({ c: true, m: true, y: true, k: true });
 
   // Dynamic label map for UX clarity
   const labelMap = {
@@ -296,6 +335,18 @@ export default function IFStudio() {
         thickness: "Dot Scale", 
         densityTooltip: "Controls the spacing of the dot grid. Higher = smaller spacing.",
         thicknessTooltip: "Controls the maximum size (scale) of the dots in the lightest areas."
+    },
+    stipple: {
+        density: "Point Count",
+        thickness: "Point Size",
+        densityTooltip: "Controls the total number of attempts to place random dots. Max ~400k points.",
+        thicknessTooltip: "Controls the relative size of the individual stipple dots."
+    },
+    flow: {
+        density: "Stroke Density",
+        thickness: "Stroke Length",
+        densityTooltip: "Controls the spacing between the contour strokes.",
+        thicknessTooltip: "Controls the length of the flow lines relative to the grid."
     }
   };
   const currentLabels = labelMap[mode] || labelMap.spiral;
@@ -323,6 +374,9 @@ export default function IFStudio() {
   const [panX, setPanX] = useState(50); 
   const [panY, setPanY] = useState(50); 
   const [centerHole, setCenterHole] = useState(0); 
+  
+  // Border/Ring Thickness State (0-10)
+  const [borderWidth, setBorderWidth] = useState(0);
     
   // Live Crop State (Used only during step='crop' for responsive feedback)
   const [liveCrop, setLiveCrop] = useState({ scale: 1, panX: 50, panY: 50, frameShape: 'circle' });
@@ -424,7 +478,42 @@ export default function IFStudio() {
     } else if (settingKey === 'brightness') {
         setBrightness(0);
         showToast(`Brightness reset.`);
+    } else if (settingKey === 'borderWidth') {
+        setBorderWidth(0);
+        showToast(`Border reset.`);
     }
+  };
+
+  // --- NEW: Presets Handler ---
+  const applyPreset = (preset) => {
+      const s = preset.settings;
+      if (!s) return;
+      
+      // Update Main Mode
+      if (s.mode) setMode(s.mode);
+      
+      // Update Mode Specific Settings
+      setModeSettings(prev => ({
+          ...prev,
+          [s.mode || mode]: { 
+              rings: s.rings ?? prev[s.mode || mode].rings, 
+              thickness: s.thickness ?? prev[s.mode || mode].thickness,
+              rotation: s.rotation ?? prev[s.mode || mode].rotation,
+              dotShape: s.dotShape ?? prev[s.mode || mode].dotShape
+          }
+      }));
+
+      // Update Global Image Settings
+      if (s.contrast !== undefined) setContrast(s.contrast);
+      if (s.brightness !== undefined) setBrightness(s.brightness);
+      if (s.borderWidth !== undefined) setBorderWidth(s.borderWidth);
+      if (s.colorMode !== undefined) setColorMode(s.colorMode);
+      
+      // Update 3D Settings if present
+      if (s.is3DMode !== undefined) setIs3DMode(s.is3DMode);
+      if (s.minThickness !== undefined) setMinThickness(s.minThickness);
+
+      showToast(`Applied preset: ${preset.label}`);
   };
     
   // --- UPDATED: Guarded Click Handler ---
@@ -467,8 +556,11 @@ export default function IFStudio() {
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setToast({ message: null, type: 'info' });
-    
+    processFile(file);
+  };
+
+  // --- NEW: Centralized File Processor for Drag & Drop ---
+  const processFile = (file) => {
     if (!file.type.startsWith('image/')) {
         showToast("Invalid file type. JPG/PNG only.", 'error');
         return;
@@ -526,44 +618,47 @@ export default function IFStudio() {
       handleStart(e);
   };
 
+  // --- NEW: Global Drag & Drop Handlers ---
+  const onDragOver = (e) => {
+      e.preventDefault();
+      setIsDragOver(true);
+  };
+  
+  const onDragLeave = (e) => {
+      e.preventDefault();
+      setIsDragOver(false);
+  };
+  
+  const onDrop = (e) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const file = e.dataTransfer.files[0];
+      if (file) processFile(file);
+  };
+
   // --- Render Core ---
   const renderFrame = (ctx, targetW, targetH, isExport = false) => {
     try {
         const img = sourceImageRef.current;
         if (!img) return;
         
-        // --- Determine Current Frame Properties (Live Crop or Final Edit) ---
+        // --- Determine Current Frame Properties ---
         const currentScale = step === 'crop' ? liveCrop.scale : scale;
         const currentPanX = step === 'crop' ? liveCrop.panX : panX;
         const currentPanY = step === 'crop' ? liveCrop.panY : panY;
         const currentFrameShape = step === 'crop' ? liveCrop.frameShape : frameShape;
 
-        // Determine aspect ratio for calculation and drawing
+        // Determine aspect ratio
         let currentAspect = 1.0;
         if (currentFrameShape === 'custom') {
             currentAspect = cropAspectW / cropAspectH;
         } else if (currentFrameShape === 'square') {
             currentAspect = 1.0;
         }
-        // Circle implicitly uses 1.0 aspect but is drawn differently later
 
         const nativeSize = Math.min(img.width, img.height);
-        
-        // --- Determine Canvas Size (Drawing Resolution) ---
-        let w, h;
-        // In crop/preview mode, base dimensions on the smaller side (nativeSize) clamped by 800px for performance.
-        if (step === 'crop' && !isExport) {
-            const cap = 800;
-            w = Math.min(nativeSize, cap);
-            h = w; // Always draw on a square base canvas for consistent positioning/panning math
-        } else {
-            // For final output, use native image size clamped at 4096 (or full native size if smaller)
-            const baseNativeDim = Math.min(nativeSize, 4096);
-            w = baseNativeDim;
-            h = baseNativeDim;
-        }
-        
-        const fg = hexToRgb(fgColor);
+        const w = targetW;
+        const h = targetH;
         
         ctx.clearRect(0, 0, w, h);
 
@@ -646,129 +741,324 @@ export default function IFStudio() {
         const sourceData = tCtx.getImageData(0, 0, w, h).data;
         const outputData = new Uint8ClampedArray(w * h * 4);
 
-        const maxDim = maxCropDim; // Max dim is still relative to the square canvas size
         const PI = Math.PI;
         const PI2 = Math.PI * 2;
         const effectiveRings = Math.max(1, rings); 
-        const radRotation = (rotation * PI) / 180;
         
-        // Define half dimensions for current frame shape boundaries
         const halfCropW = cropW / 2;
         const halfCropH = cropH / 2;
-
         const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
         const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
-        
-        const fgR = fg.r, fgG = fg.g, fgB = fg.b;
         const pxPerMm = w / 200; // Default 200mm width if input hidden
         const minFeaturePx = is3DMode ? (minThickness * pxPerMm) : 0;
 
-        for (let y = 0; y < h; y++) {
-          for (let x = 0; x < w; x++) {
-            const index = (y * w + x) * 4;
-            const setTransparent = () => { outputData[index+3] = 0; };
-
-            const dx = x - centerX; // distance from center X
-            const dy = y - centerY; // distance from center Y
-            const distSq = dx*dx + dy*dy;
-
-            // Step 1: Crop Frame Masking
-            if (currentFrameShape === 'circle') {
-                if (distSq > maxRadiusSq) { setTransparent(); continue; }
-            } else { // 'square' or 'custom' (rectangular crop)
-                if (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH) { setTransparent(); continue; }
-            }
-            
-            // Step 2: Center Hole Masking
-            if (distSq < holeRadiusSq) { setTransparent(); continue; }
-            if (sourceData[index+3] === 0) { setTransparent(); continue; }
-
-            // Step 3: Luma calculation
-            let r = sourceData[index];
-            let g = sourceData[index + 1];
-            let b = sourceData[index + 2];
-            let luma = 0.299 * r + 0.587 * g + 0.114 * b;
-            
-            luma += brightness;
-            luma = (luma - 128) * contrast + 128;
-            if (luma < 0) luma = 0; if (luma > 255) luma = 255;
-            
-            let val = luma / 255;
-            if (invert) val = 1.0 - val;
-
-            let isForeground = false;
-            
-            // Step 4: Pattern logic
-            if (mode === 'spiral') {
-              const dist = Math.sqrt(distSq);
-              const angle = Math.atan2(dy, dx) + radRotation;
-              const normDist = dist / (maxCropDim / 2);
-              const wave = Math.sin( (normDist * effectiveRings * PI2) + angle );
-              const spacingPx = (maxCropDim / 2) / effectiveRings; 
-              let threshold = (1 - val) * (lineThickness * 2);
-              if (is3DMode) {
-                  const minDuty = minFeaturePx / spacingPx;
-                  if (threshold < minDuty) threshold = minDuty;
-              } else {
-                  const minConn = 0.05; 
-                  if (threshold < minConn && lineThickness > 0.1) threshold = minConn;
-              }
-              if ((wave + 1) / 2 < threshold) isForeground = true;
-            } else if (mode === 'lines') {
-              const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
-              const normY = ry / (maxCropDim / 2); // Use maxCropDim for scaling since line pitch is relative to max pattern size
-              const wave = Math.sin( normY * effectiveRings * PI );
-              const spacingPx = maxCropDim / effectiveRings;
-              let threshold = (1 - val) * (lineThickness * 2);
-              if (is3DMode) {
-                  const minDuty = minFeaturePx / spacingPx;
-                  if (threshold < minDuty) threshold = minDuty;
-              }
-              if ((wave + 1) / 2 < threshold) isForeground = true;
-            } else if (mode === 'dots') {
-               const rx = dx * Math.cos(radRotation) - dy * Math.sin(radRotation);
-               const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
-               const gridSize = maxCropDim / effectiveRings; 
-               if (gridSize > 0) {
-                   const cellX = Math.floor(rx / gridSize);
-                   const cellY = Math.floor(ry / gridSize);
-                   const lx = rx - ((cellX + 0.5) * gridSize);
-                   const ly = ry - ((cellY + 0.5) * gridSize);
-                   let dome = 0, normDist = 0;
-
-                   if (dotShape === 'circle') {
-                         normDist = Math.sqrt(lx*lx + ly*ly) / (gridSize / 1.5);
-                         if (normDist < 1) dome = Math.cos(normDist * (PI / 2));
-                   } else if (dotShape === 'square') {
-                         normDist = Math.max(Math.abs(lx), Math.abs(ly)) / (gridSize / 2.0); 
-                         if (normDist < 1) dome = 1.0 - normDist;
-                   } else if (dotShape === 'diamond') {
-                         normDist = (Math.abs(lx) + Math.abs(ly)) / (gridSize / 1.5); 
-                         if (normDist < 1) dome = 1.0 - normDist;
-                   } else if (dotShape === 'triangle') {
-                         const k = Math.sqrt(3);
-                         normDist = Math.max(Math.abs(lx) * k/2 + ly/2, -ly) / (gridSize / 2.5);
-                         if (normDist < 1) dome = 1.0 - normDist;
-                   }
-                   let cutoff = val / lineThickness;
-                   if (is3DMode) {
-                         const maxValForSafeSize = 1.0 - (minFeaturePx / gridSize); 
-                         if (cutoff > maxValForSafeSize) cutoff = maxValForSafeSize;
-                   }
-                   if (dome > cutoff) isForeground = true;
-               }
-            }
-
-            if (isForeground) {
-              outputData[index] = fgR; outputData[index+1] = fgG; outputData[index+2] = fgB; outputData[index+3] = 255;
-            } else {
-              setTransparent();
-            }
-          }
+        // Define layers to process
+        let layersToRender = [];
+        if (colorMode === 'cmyk') {
+            if (activeLayers.c) layersToRender.push({ key: 'c', color: CMYK_COLORS.c, angleOffset: CMYK_ANGLES.c });
+            if (activeLayers.m) layersToRender.push({ key: 'm', color: CMYK_COLORS.m, angleOffset: CMYK_ANGLES.m });
+            if (activeLayers.y) layersToRender.push({ key: 'y', color: CMYK_COLORS.y, angleOffset: CMYK_ANGLES.y });
+            if (activeLayers.k) layersToRender.push({ key: 'k', color: CMYK_COLORS.k, angleOffset: CMYK_ANGLES.k });
+        } else {
+            layersToRender.push({ key: 'mono', color: hexToRgb(fgColor), angleOffset: 0 }); // Mono acts as "K" but mapped to luminance
         }
 
-        const outputImageData = new ImageData(outputData, w, h);
-        ctx.putImageData(outputImageData, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        
+        // We iterate layers. For each layer, we compute the pattern.
+        
+        layersToRender.forEach(layer => {
+            const isMono = layer.key === 'mono';
+            const layerColor = isMono ? layer.color : hexToRgb(layer.color); // RGB object
+            const totalRotation = rotation + layer.angleOffset;
+            const radRotation = (totalRotation * PI) / 180;
+
+            // Create a temp buffer for this layer
+            const layerImgData = ctx.createImageData(w, h);
+            const data = layerImgData.data;
+
+            // -- Stipple Optimization for Layers --
+            if (mode === 'stipple') {
+                const totalPoints = effectiveRings * 800; 
+                const baseScale = maxCropDim / 1000; 
+                const dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
+                
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.fillStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
+                
+                for (let i = 0; i < totalPoints; i++) {
+                    const r1 = seededRandom(i + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
+                    const r2 = seededRandom(i + 1000000 + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
+                    
+                    let px, py;
+                    if (frameShape === 'circle') {
+                        px = centerX - maxCropDim/2 + r1 * maxCropDim;
+                        py = centerY - maxCropDim/2 + r2 * maxCropDim;
+                    } else {
+                        px = cropX + r1 * cropW;
+                        py = cropY + r2 * cropH;
+                    }
+                    
+                    const dx = px - centerX; const dy = py - centerY; const distSq = dx*dx + dy*dy;
+                    if (frameShape === 'circle' && distSq > maxRadiusSq) continue;
+                    if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
+                    if (distSq < holeRadiusSq) continue;
+
+                    const ix = Math.floor(px); const iy = Math.floor(py);
+                    if (ix < 0 || ix >= w || iy < 0 || iy >= h) continue;
+                    const idx = (iy * w + ix) * 4;
+                    if (sourceData[idx+3] === 0) continue;
+
+                    // Get Value based on Layer
+                    let val = 1.0;
+                    let r = sourceData[idx]/255, g = sourceData[idx+1]/255, b = sourceData[idx+2]/255;
+                    
+                    if (isMono) {
+                        let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
+                        luma += brightness;
+                        luma = (luma - 128) * contrast + 128;
+                        if (luma < 0) luma = 0; if (luma > 255) luma = 255;
+                        val = luma / 255;
+                        if (invert) val = 1.0 - val;
+                    } else {
+                        r = ((r - 0.5) * contrast + 0.5) + (brightness/255);
+                        g = ((g - 0.5) * contrast + 0.5) + (brightness/255);
+                        b = ((b - 0.5) * contrast + 0.5) + (brightness/255);
+                        r = Math.max(0, Math.min(1, r));
+                        g = Math.max(0, Math.min(1, g));
+                        b = Math.max(0, Math.min(1, b));
+
+                        let k = 1 - Math.max(r, g, b);
+                        let c = (1 - r - k) / (1 - k) || 0;
+                        let m = (1 - g - k) / (1 - k) || 0;
+                        let y = (1 - b - k) / (1 - k) || 0;
+                        
+                        if (layer.key === 'c') val = 1 - c;
+                        if (layer.key === 'm') val = 1 - m;
+                        if (layer.key === 'y') val = 1 - y;
+                        if (layer.key === 'k') val = 1 - k;
+                    }
+
+                    const r3 = seededRandom(i + 2000000);
+                    if (r3 > val) { // Keep dot
+                        ctx.beginPath();
+                        ctx.arc(px, py, dotRadius, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                }
+                ctx.globalCompositeOperation = 'source-over';
+                return; 
+            }
+
+            // -- Flow Field (Contour) Logic --
+            if (mode === 'flow') {
+                const gridSize = maxCropDim / effectiveRings; 
+                const strokeLen = gridSize * (lineThickness * 3.0); // Length scaler
+                
+                ctx.globalCompositeOperation = 'multiply';
+                ctx.strokeStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
+                ctx.lineWidth = Math.max(1, gridSize * 0.2); // Base thickness
+                
+                // Iterate Grid
+                for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
+                    for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
+                        const cx = centerX + x;
+                        const cy = centerY + y;
+                        
+                        // Bounds Check
+                        const dx = cx - centerX; const dy = cy - centerY; const distSq = dx*dx + dy*dy;
+                        if (currentFrameShape === 'circle' && distSq > maxRadiusSq) continue;
+                        if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
+                        if (distSq < holeRadiusSq) continue;
+
+                        const ix = Math.floor(cx); const iy = Math.floor(cy);
+                        if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
+                        const idx = (iy * w + ix) * 4;
+                        if (sourceData[idx+3] === 0) continue;
+
+                        // Calculate Sobel-ish Gradient Angle
+                        // Sample neighbors
+                        const getLumaAt = (ox, oy) => {
+                            const i = ((iy+oy)*w + (ix+ox))*4;
+                            let r = sourceData[i]/255, g = sourceData[i+1]/255, b = sourceData[i+2]/255;
+                            return 0.299*r + 0.587*g + 0.114*b;
+                        };
+                        
+                        const gx = getLumaAt(1, 0) - getLumaAt(-1, 0);
+                        const gy = getLumaAt(0, 1) - getLumaAt(0, -1);
+                        
+                        // Angle perpendicular to gradient (contours)
+                        const angle = Math.atan2(gy, gx) + Math.PI/2;
+                        
+                        // Brightness for length modulation? Or just presence?
+                        // Let's use brightness to modulate thickness/opacity simulation or just draw everything like a field
+                        // Usually flow fields draw everywhere but maybe skip very bright areas
+                        const luma = getLumaAt(0,0);
+                        const val = (luma - 0.5) * contrast + 0.5 + (brightness/255);
+                        
+                        // Threshold check
+                        if (val > 0.95 && !invert) continue; // Skip white
+                        if (val < 0.05 && invert) continue; // Skip black if inverted
+                        
+                        const len = strokeLen;
+                        
+                        const x1 = cx - Math.cos(angle) * len/2;
+                        const y1 = cy - Math.sin(angle) * len/2;
+                        const x2 = cx + Math.cos(angle) * len/2;
+                        const y2 = cy + Math.sin(angle) * len/2;
+                        
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                }
+                ctx.globalCompositeOperation = 'source-over';
+                return;
+            }
+
+            // -- Standard Modes Loop (Spiral, Lines, Dots) --
+            // Only run this if NOT stipple AND NOT flow
+            if (mode !== 'stipple' && mode !== 'flow') {
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const index = (y * w + x) * 4;
+                        const setTransparent = () => { data[index+3] = 0; };
+
+                        const dx = x - centerX; const dy = y - centerY; const distSq = dx*dx + dy*dy;
+
+                        // Bounds
+                        if (currentFrameShape === 'circle' && distSq > maxRadiusSq) { setTransparent(); continue; }
+                        if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) { setTransparent(); continue; }
+                        if (distSq < holeRadiusSq) { setTransparent(); continue; }
+                        if (sourceData[index+3] === 0) { setTransparent(); continue; }
+
+                        // Value Extraction
+                        let val = 1.0;
+                        let r = sourceData[index]/255, g = sourceData[index+1]/255, b = sourceData[index+2]/255;
+
+                        if (isMono) {
+                            let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
+                            luma += brightness;
+                            luma = (luma - 128) * contrast + 128;
+                            if (luma < 0) luma = 0; if (luma > 255) luma = 255;
+                            val = luma / 255;
+                            if (invert) val = 1.0 - val;
+                        } else {
+                            // CMYK Conversion with Contrast/Bright
+                            r = ((r - 0.5) * contrast + 0.5) + (brightness/255);
+                            g = ((g - 0.5) * contrast + 0.5) + (brightness/255);
+                            b = ((b - 0.5) * contrast + 0.5) + (brightness/255);
+                            r = Math.max(0, Math.min(1, r)); g = Math.max(0, Math.min(1, g)); b = Math.max(0, Math.min(1, b));
+
+                            let k = 1 - Math.max(r, g, b);
+                            let c = (1 - r - k) / (1 - k) || 0;
+                            let m = (1 - g - k) / (1 - k) || 0;
+                            let y = (1 - b - k) / (1 - k) || 0;
+                            
+                            if (layer.key === 'c') val = 1 - c;
+                            if (layer.key === 'm') val = 1 - m;
+                            if (layer.key === 'y') val = 1 - y;
+                            if (layer.key === 'k') val = 1 - k;
+                        }
+
+                        let isForeground = false;
+
+                        // Pattern Logic
+                        if (mode === 'spiral') {
+                            const dist = Math.sqrt(distSq);
+                            const angle = Math.atan2(dy, dx) + radRotation;
+                            const normDist = dist / (maxCropDim / 2);
+                            const wave = Math.sin( (normDist * effectiveRings * PI2) + angle );
+                            const spacingPx = (maxCropDim / 2) / effectiveRings; 
+                            let threshold = (1 - val) * (lineThickness * 2);
+                            if (is3DMode) {
+                                const minDuty = minFeaturePx / spacingPx;
+                                if (threshold < minDuty) threshold = minDuty;
+                            } else {
+                                const minConn = 0.05; 
+                                if (threshold < minConn && lineThickness > 0.1) threshold = minConn;
+                            }
+                            if ((wave + 1) / 2 < threshold) isForeground = true;
+                        } else if (mode === 'lines') {
+                            const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
+                            const normY = ry / (maxCropDim / 2); 
+                            const wave = Math.sin( normY * effectiveRings * PI );
+                            const spacingPx = maxCropDim / effectiveRings;
+                            let threshold = (1 - val) * (lineThickness * 2);
+                            if (is3DMode) {
+                                const minDuty = minFeaturePx / spacingPx;
+                                if (threshold < minDuty) threshold = minDuty;
+                            }
+                            if ((wave + 1) / 2 < threshold) isForeground = true;
+                        } else if (mode === 'dots') {
+                            const rx = dx * Math.cos(radRotation) - dy * Math.sin(radRotation);
+                            const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
+                            const gridSize = maxCropDim / effectiveRings; 
+                            if (gridSize > 0) {
+                                const cellX = Math.floor(rx / gridSize);
+                                const cellY = Math.floor(ry / gridSize);
+                                const lx = rx - ((cellX + 0.5) * gridSize);
+                                const ly = ry - ((cellY + 0.5) * gridSize);
+                                let dome = 0, normDist = 0;
+
+                                if (dotShape === 'circle') {
+                                        normDist = Math.sqrt(lx*lx + ly*ly) / (gridSize / 1.5);
+                                        if (normDist < 1) dome = Math.cos(normDist * (PI / 2));
+                                } else if (dotShape === 'square') {
+                                        normDist = Math.max(Math.abs(lx), Math.abs(ly)) / (gridSize / 2.0); 
+                                        if (normDist < 1) dome = 1.0 - normDist;
+                                } else if (dotShape === 'diamond') {
+                                        normDist = (Math.abs(lx) + Math.abs(ly)) / (gridSize / 1.5); 
+                                        if (normDist < 1) dome = 1.0 - normDist;
+                                } else if (dotShape === 'triangle') {
+                                        const k = Math.sqrt(3);
+                                        normDist = Math.max(Math.abs(lx) * k/2 + ly/2, -ly) / (gridSize / 2.5);
+                                        if (normDist < 1) dome = 1.0 - normDist;
+                                }
+                                let cutoff = val / lineThickness;
+                                if (is3DMode) {
+                                        const maxValForSafeSize = 1.0 - (minFeaturePx / gridSize); 
+                                        if (cutoff > maxValForSafeSize) cutoff = maxValForSafeSize;
+                                }
+                                if (dome > cutoff) isForeground = true;
+                            }
+                        }
+
+                        if (isForeground) {
+                            data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255;
+                        } else {
+                            setTransparent();
+                        }
+                    }
+                }
+                
+                // Composite this layer onto main canvas
+                const layerCanvas = document.createElement('canvas');
+                layerCanvas.width = w; layerCanvas.height = h;
+                layerCanvas.getContext('2d').putImageData(layerImgData, 0, 0);
+                
+                ctx.globalCompositeOperation = 'multiply'; // Mix colors
+                ctx.drawImage(layerCanvas, 0, 0);
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        }); // End Layer Loop
+        
+        // --- DRAW BORDER (On Top) ---
+        if (borderWidth > 0) {
+            const borderPx = (borderWidth * maxCropDim) / 200; 
+            ctx.lineWidth = borderPx;
+            // Border is always main theme color or black? In CMYK mode, border usually Black (K).
+            ctx.strokeStyle = colorMode === 'cmyk' ? '#000000' : fgColor;
+            ctx.beginPath();
+            if (currentFrameShape === 'circle') {
+                ctx.arc(centerX, centerY, maxCropDim / 2 - borderPx/2, 0, Math.PI * 2);
+            } else {
+                ctx.rect(cropX + borderPx/2, cropY + borderPx/2, cropW - borderPx, cropH - borderPx);
+            }
+            ctx.stroke();
+        }
+
     } catch(e) {
         console.error(e);
         showToast("Rendering error. Try refreshing.", 'error');
@@ -783,11 +1073,12 @@ export default function IFStudio() {
     // Determine which set of parameters to use
     const useLiveCrop = step === 'crop';
     
-    // Use full width for 1:1 preview always (constrained by CSS max-width)
-    const targetW = img.width;
+    // FIX: Use native size (min dimension) for aspect ratio calculation
+    const targetW = Math.min(img.width, img.height);
     
-    // Performance: If step is CROP, use lower res for fluid animation
-    const safeW = useLiveCrop ? Math.min(800, targetW) : Math.min(4096, targetW);
+    // Performance: Cap preview resolution at 800px to prevent bottlenecks on large images.
+    // The pattern math scales relatively, so the visual density remains consistent with the high-res export.
+    const safeW = Math.min(800, targetW); 
     const safeH = safeW;
 
     const canvas = canvasRef.current;
@@ -819,9 +1110,11 @@ export default function IFStudio() {
         const drawY = centerY - (drawH / 2) + shiftY;
         
         ctx.clearRect(0, 0, safeW, safeH);
-        ctx.drawImage(img, drawX, drawY, drawW, drawH);
         
-        // Draw the frame mask on top of the original image for context
+        // --- CLIP MASK LOGIC ---
+        ctx.save();
+        ctx.beginPath();
+        
         const maxCropDim = Math.min(safeW, safeH);
         let cropW, cropH;
         let finalAspect = 1.0;
@@ -843,9 +1136,32 @@ export default function IFStudio() {
         const cropX = centerX - cropW / 2;
         const cropY = centerY - cropH / 2;
         
+        // 1. Apply Outer Clip
+        if (frameShape === 'circle') {
+            ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
+        } else {
+            ctx.rect(cropX, cropY, cropW, cropH);
+        }
+        ctx.clip();
+        
+        // 2. Draw Image
+        ctx.drawImage(img, drawX, drawY, drawW, drawH);
+        
+        // 3. Cut out Center Hole if needed (to match render)
+        if (centerHole > 0) {
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath();
+            const holeRadius = (maxCropDim/2) * (centerHole/100);
+            ctx.arc(centerX, centerY, holeRadius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        ctx.restore();
+        
         // Show boundary of the cropped area
         ctx.strokeStyle = '#FF0000'; // Red border for comparison mode
-        ctx.lineWidth = 4;
+        ctx.lineWidth = 2;
         ctx.setLineDash([5, 5]);
         ctx.beginPath();
         if (frameShape === 'circle') {
@@ -860,7 +1176,7 @@ export default function IFStudio() {
         renderFrame(ctx, safeW, safeH, false);
     }
     setIsProcessing(false);
-  }, [mode, modeSettings, scale, contrast, brightness, invert, fgColor, panX, panY, frameShape, centerHole, step, is3DMode, minThickness, isDragging, compareMode, liveCrop.scale, liveCrop.panX, liveCrop.panY, liveCrop.frameShape, cropAspectW, cropAspectH]); // Added cropAspectW/H
+  }, [mode, modeSettings, scale, contrast, brightness, invert, fgColor, panX, panY, frameShape, centerHole, step, is3DMode, minThickness, isDragging, compareMode, liveCrop.scale, liveCrop.panX, liveCrop.panY, liveCrop.frameShape, cropAspectW, cropAspectH, borderWidth, colorMode, activeLayers]); // Added colorMode, activeLayers
 
   // SUGGESTION 1: Add Canvas Resize Listener for Stability
   useEffect(() => {
@@ -886,105 +1202,343 @@ export default function IFStudio() {
   }, [processImage, imageSrc]);
 
   // --- SVG Export Logic ---
-  const downloadSVG = (multiplier) => { // Multiplier argument is now 1 (Native) or 2 (Double)
-    const exportMultiplier = multiplier || 1; 
-    if (!sourceImageRef.current) return;
+  const downloadSVG = () => { 
+    if (!sourceImageRef.current || !canvasRef.current) return;
     setIsProcessing(true);
-    showToast(`Generating SVG... (Note: Vector generation uses a basic placeholder. Use PNG for final raster outputs.)`, 'info');
+    showToast(`Calculating Vectors...`, 'info');
 
-    try {
-        const img = sourceImageRef.current;
-        const nativeSize = Math.min(img.width, img.height);
-        
-        let finalAspect = 1.0;
-        if (frameShape === 'custom') {
-            finalAspect = cropAspectW / cropAspectH;
-        } else if (frameShape === 'square') {
-            finalAspect = 1.0;
-        }
+    setTimeout(() => {
+        try {
+            // We use the pixel data from the canvas because it's already cropped, filtered, and processed
+            // This ensures WYSIWYG results.
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width;
+            const h = canvas.height;
+            const imgData = ctx.getImageData(0, 0, w, h).data;
 
-        const maxNativeDim = nativeSize * exportMultiplier;
-        let w, h;
+            // Geometry Config
+            const PI = Math.PI;
+            const centerX = w / 2;
+            const centerY = h / 2;
+            const effectiveRings = Math.max(1, rings); 
+            // Rotation is now handled per layer!
+            
+            // Re-calculate crop bounds to ensure vectors don't spill
+            let cropW, cropH;
+            let finalAspect = 1.0;
+            if (frameShape === 'custom') finalAspect = cropAspectW / cropAspectH;
 
-        if (frameShape === 'custom' || frameShape === 'square') {
-            if (finalAspect >= 1) {
-                w = maxNativeDim;
-                h = maxNativeDim / finalAspect;
-            } else {
-                h = maxNativeDim;
-                w = maxNativeDim * finalAspect;
+            // Base max size is the square canvas
+            const maxCropDim = Math.min(w, h);
+            
+            if (frameShape === 'circle' || frameShape === 'square') {
+                cropW = maxCropDim;
+                cropH = maxCropDim;
+            } else { // 'custom'
+                if (finalAspect >= 1) { cropW = maxCropDim; cropH = maxCropDim / finalAspect; }
+                else { cropH = maxCropDim; cropW = maxCropDim * finalAspect; }
             }
-        } else { // Circle, defaults to square native size
-            w = maxNativeDim;
-            h = maxNativeDim;
+            const halfCropW = cropW / 2;
+            const halfCropH = cropH / 2;
+            const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
+            const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
+
+            let svgBody = "";
+
+            // Get Continuous Tone Data from Helper Canvas
+            const tempCtx = helperCanvasRef.current.getContext('2d');
+            const sourceData = tempCtx.getImageData(0, 0, w, h).data;
+
+            // Define Layers to Export
+            let layersToExport = [];
+            if (colorMode === 'cmyk') {
+                if (activeLayers.c) layersToExport.push({ key: 'c', name: 'Cyan', color: CMYK_COLORS.c, angleOffset: CMYK_ANGLES.c });
+                if (activeLayers.m) layersToExport.push({ key: 'm', name: 'Magenta', color: CMYK_COLORS.m, angleOffset: CMYK_ANGLES.m });
+                if (activeLayers.y) layersToExport.push({ key: 'y', name: 'Yellow', color: CMYK_COLORS.y, angleOffset: CMYK_ANGLES.y });
+                if (activeLayers.k) layersToExport.push({ key: 'k', name: 'Key', color: CMYK_COLORS.k, angleOffset: CMYK_ANGLES.k });
+            } else {
+                layersToExport.push({ key: 'mono', name: 'Layer_1', color: fgColor, angleOffset: 0 });
+            }
+
+            layersToExport.forEach(layer => {
+                let layerPaths = [];
+                const totalRotation = rotation + layer.angleOffset;
+                const radRotation = (totalRotation * PI) / 180;
+                
+                // Helper to get value specific to this layer
+                const getSourceVal = (x, y) => {
+                    const ix = Math.floor(x); const iy = Math.floor(y);
+                    if (ix < 0 || ix >= w || iy < 0 || iy >= h) return 1;
+                    const dx = ix - centerX; const dy = iy - centerY; const distSq = dx*dx + dy*dy;
+                    if (frameShape === 'circle' && distSq > maxRadiusSq) return 1;
+                    if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) return 1;
+                    if (distSq < holeRadiusSq) return 1;
+                    
+                    const idx = (iy * w + ix) * 4;
+                    if (sourceData[idx+3] === 0) return 1;
+
+                    let r = sourceData[idx]/255; let g = sourceData[idx+1]/255; let b = sourceData[idx+2]/255;
+                    let val = 1.0;
+
+                    if (colorMode === 'mono') {
+                        let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
+                        luma += brightness;
+                        luma = (luma - 128) * contrast + 128;
+                        if (luma < 0) luma = 0; if (luma > 255) luma = 255;
+                        val = luma / 255;
+                        if (invert) val = 1.0 - val;
+                    } else {
+                        // CMYK
+                        r = ((r - 0.5) * contrast + 0.5) + (brightness/255);
+                        g = ((g - 0.5) * contrast + 0.5) + (brightness/255);
+                        b = ((b - 0.5) * contrast + 0.5) + (brightness/255);
+                        r = Math.max(0, Math.min(1, r)); g = Math.max(0, Math.min(1, g)); b = Math.max(0, Math.min(1, b));
+
+                        let k = 1 - Math.max(r, g, b);
+                        let c = (1 - r - k) / (1 - k) || 0;
+                        let m = (1 - g - k) / (1 - k) || 0;
+                        let y = (1 - b - k) / (1 - k) || 0;
+                        
+                        if (layer.key === 'c') val = 1 - c;
+                        if (layer.key === 'm') val = 1 - m;
+                        if (layer.key === 'y') val = 1 - y;
+                        if (layer.key === 'k') val = 1 - k;
+                    }
+                    return val;
+                };
+
+                // --- Generation Logic (Per Layer) ---
+                if (mode === 'flow') {
+                    const gridSize = maxCropDim / effectiveRings; 
+                    const strokeLen = gridSize * (lineThickness * 3.0);
+                    
+                    // Iterate Grid
+                    for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
+                        for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
+                            const cx = centerX + x; const cy = centerY + y;
+                            
+                            // Bounds Check
+                            const dx = cx - centerX; const dy = cy - centerY; const distSq = dx*dx + dy*dy;
+                            if (frameShape === 'circle' && distSq > maxRadiusSq) continue;
+                            if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
+                            if (distSq < holeRadiusSq) continue;
+
+                            const ix = Math.floor(cx); const iy = Math.floor(cy);
+                            if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
+                            const idx = (iy * w + ix) * 4;
+                            if (sourceData[idx+3] === 0) continue;
+
+                            // Calculate Sobel-ish Gradient Angle
+                            const getLumaAt = (ox, oy) => {
+                                const i = ((iy+oy)*w + (ix+ox))*4;
+                                let r = sourceData[i]/255, g = sourceData[i+1]/255, b = sourceData[i+2]/255;
+                                return 0.299*r + 0.587*g + 0.114*b;
+                            };
+                            
+                            const gx = getLumaAt(1, 0) - getLumaAt(-1, 0);
+                            const gy = getLumaAt(0, 1) - getLumaAt(0, -1);
+                            
+                            // Angle perpendicular to gradient (contours)
+                            const angle = Math.atan2(gy, gx) + Math.PI/2;
+                            
+                            // Brightness check for filtering
+                            const val = getSourceVal(cx, cy); // 0 (dark) to 1 (light)
+                            if (val > 0.95) continue; // Skip white areas
+                            
+                            const len = strokeLen;
+                            const x1 = cx - Math.cos(angle) * len/2;
+                            const y1 = cy - Math.sin(angle) * len/2;
+                            const x2 = cx + Math.cos(angle) * len/2;
+                            const y2 = cy + Math.sin(angle) * len/2;
+                            
+                            layerPaths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${Math.max(0.5, gridSize*0.2).toFixed(2)}" stroke-linecap="round" />`);
+                        }
+                    }
+                } else if (mode === 'stipple') {
+                    // ... existing stipple logic ...
+                    const totalPoints = effectiveRings * 800;
+                    const baseScale = maxCropDim / 1000; 
+                    const dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
+                    
+                    for (let i = 0; i < totalPoints; i++) {
+                        const seedOffset = layer.key === 'mono' ? 0 : layer.key.charCodeAt(0) * 1000;
+                        const r1 = seededRandom(i + seedOffset);
+                        const r2 = seededRandom(i + 1000000 + seedOffset);
+                        
+                        let px, py;
+                        if (frameShape === 'circle') {
+                            px = centerX - maxCropDim/2 + r1 * maxCropDim;
+                            py = centerY - maxCropDim/2 + r2 * maxCropDim;
+                        } else {
+                            px = (centerX - cropW/2) + r1 * cropW;
+                            py = (centerY - cropH/2) + r2 * cropH;
+                        }
+                        
+                        const val = getSourceVal(px, py); // 0 (dark) to 1 (light)
+                        if (val === 1) continue;
+                        
+                        const r3 = seededRandom(i + 2000000);
+                        if (r3 > val) { // Keep dot
+                            layerPaths.push(`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${dotRadius.toFixed(2)}" />`);
+                        }
+                    }
+
+                } else if (mode === 'dots') {
+                    // ... existing dots logic ...
+                    const gridSize = maxCropDim / effectiveRings; 
+                    for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
+                        for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
+                            const rx = x * Math.cos(radRotation) - y * Math.sin(radRotation);
+                            const ry = x * Math.sin(radRotation) + y * Math.cos(radRotation);
+                            const cx = centerX + rx; const cy = centerY + ry;
+                            const val = getSourceVal(cx, cy); 
+                            const thickness = (1 - val) * lineThickness; 
+                            if (thickness > 0.05) { 
+                                const size = gridSize * thickness; 
+                                if (dotShape === 'circle') {
+                                    layerPaths.push(`<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(size/1.5).toFixed(2)}" />`);
+                                } else if (dotShape === 'square') {
+                                    layerPaths.push(`<rect x="${(cx - size/2).toFixed(2)}" y="${(cy - size/2).toFixed(2)}" width="${size.toFixed(2)}" height="${size.toFixed(2)}" />`);
+                                } else if (dotShape === 'diamond') {
+                                    layerPaths.push(`<rect x="${(cx - size/2).toFixed(2)}" y="${(cy - size/2).toFixed(2)}" width="${size.toFixed(2)}" height="${size.toFixed(2)}" transform="rotate(45 ${cx} ${cy})" />`);
+                                } else if (dotShape === 'triangle') {
+                                    const hTri = size * (Math.sqrt(3)/2); const rTri = hTri * (2/3); 
+                                    const p1 = `${cx},${cy - rTri}`; const p2 = `${cx - size/2},${cy + (hTri - rTri)}`; const p3 = `${cx + size/2},${cy + (hTri - rTri)}`;
+                                    layerPaths.push(`<polygon points="${p1} ${p2} ${p3}" />`);
+                                }
+                            }
+                        }
+                    }
+
+                } else if (mode === 'spiral') {
+                    // ... existing spiral logic ...
+                    const spacingPx = (maxCropDim / 2) / effectiveRings;
+                    const maxTheta = effectiveRings * 2 * PI;
+                    const steps = Math.min(20000, effectiveRings * 120); 
+                    const stepSize = maxTheta / steps;
+                    let innerPoints = []; let outerPoints = []; let isDrawing = false;
+                    
+                    for (let theta = 0; theta < maxTheta; theta += stepSize) {
+                        const normDist = theta / maxTheta; const r = normDist * (maxCropDim / 2);
+                        const angle = theta + radRotation;
+                        const cx = centerX + r * Math.cos(angle); const cy = centerY + r * Math.sin(angle);
+                        const val = getSourceVal(cx, cy);
+                        let wFactor = (1 - val) * lineThickness; if (wFactor < 0) wFactor = 0;
+                        if (is3DMode && wFactor > 0) { const minDuty = (minThickness * (w/200)) / spacingPx; if (wFactor < minDuty) wFactor = minDuty; }
+                        const actualWidth = wFactor * spacingPx;
+
+                        if (actualWidth > 0.5) { 
+                            if (!isDrawing) isDrawing = true; 
+                            const rInner = r - actualWidth/2; const rOuter = r + actualWidth/2;
+                            innerPoints.push({ x: centerX + rInner * Math.cos(angle), y: centerY + rInner * Math.sin(angle) });
+                            outerPoints.push({ x: centerX + rOuter * Math.cos(angle), y: centerY + rOuter * Math.sin(angle) });
+                        } else {
+                            if (isDrawing) {
+                                if (innerPoints.length > 2) {
+                                    let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
+                                    for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
+                                    d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
+                                    for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
+                                    d += "Z";
+                                    layerPaths.push(`<path d="${d}" stroke="none" />`);
+                                }
+                                innerPoints = []; outerPoints = []; isDrawing = false;
+                            }
+                        }
+                    }
+                    if (innerPoints.length > 2) {
+                        let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
+                        for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
+                        d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
+                        for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
+                        d += "Z";
+                        layerPaths.push(`<path d="${d}" stroke="none" />`);
+                    }
+
+                } else if (mode === 'lines') {
+                    // ... existing lines logic ...
+                    const spacingPx = maxCropDim / effectiveRings;
+                    for (let ly = -maxCropDim/2; ly < maxCropDim/2; ly += spacingPx) {
+                        let innerPoints = []; let outerPoints = []; let isDrawing = false;
+                        const stepPx = 2; 
+                        for (let lx = -maxCropDim/2; lx < maxCropDim/2; lx += stepPx) {
+                            const gx = centerX + (lx * Math.cos(radRotation) - ly * Math.sin(radRotation));
+                            const gy = centerY + (lx * Math.sin(radRotation) + ly * Math.cos(radRotation));
+                            const val = getSourceVal(gx, gy);
+                            let wFactor = (1 - val) * lineThickness; if (wFactor < 0) wFactor = 0;
+                            if (is3DMode && wFactor > 0) { const minDuty = (minThickness * (w/200)) / spacingPx; if (wFactor < minDuty) wFactor = minDuty; }
+                            const actualWidth = wFactor * spacingPx;
+                            
+                            if (actualWidth > 0.5) {
+                                if (!isDrawing) isDrawing = true;
+                                const nx = -Math.sin(radRotation) * (actualWidth/2);
+                                const ny = Math.cos(radRotation) * (actualWidth/2);
+                                innerPoints.push({ x: gx + nx, y: gy + ny });
+                                outerPoints.push({ x: gx - nx, y: gy - ny });
+                            } else {
+                                if (isDrawing) {
+                                    if (innerPoints.length > 2) {
+                                        let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
+                                        for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
+                                        d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
+                                        for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
+                                        d += "Z";
+                                        layerPaths.push(`<path d="${d}" stroke="none" />`);
+                                    }
+                                    innerPoints = []; outerPoints = []; isDrawing = false;
+                                }
+                            }
+                        }
+                        if (innerPoints.length > 2) {
+                            let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
+                            for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
+                            d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
+                            for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
+                            d += "Z";
+                            layerPaths.push(`<path d="${d}" stroke="none" />`);
+                        }
+                    }
+                }
+
+                // Add Layer Group to SVG Body
+                svgBody += `<g id="${layer.name}" fill="${layer.color}" stroke="none">\n${layerPaths.join('\n')}\n</g>\n`;
+            }); // End Layer Loop
+
+            // --- ADD BORDER/RING TO SVG (Top Level) ---
+            if (borderWidth > 0) {
+                const borderPx = (borderWidth * maxCropDim) / 200;
+                const cropX = (frameShape === 'circle') ? centerX : (centerX - cropW / 2);
+                const cropY = (frameShape === 'circle') ? centerY : (centerY - cropH / 2);
+                const strokeColor = colorMode === 'cmyk' ? '#000000' : fgColor;
+                
+                svgBody += `<g id="Border">\n`;
+                if (frameShape === 'circle') {
+                    svgBody += `<circle cx="${centerX.toFixed(2)}" cy="${centerY.toFixed(2)}" r="${(maxCropDim/2 - borderPx/2).toFixed(2)}" stroke="${strokeColor}" stroke-width="${borderPx.toFixed(2)}" fill="none" />`;
+                } else {
+                    svgBody += `<rect x="${(cropX + borderPx/2).toFixed(2)}" y="${(cropY + borderPx/2).toFixed(2)}" width="${(cropW - borderPx).toFixed(2)}" height="${(cropH - borderPx).toFixed(2)}" stroke="${strokeColor}" stroke-width="${borderPx.toFixed(2)}" fill="none" />`;
+                }
+                svgBody += `\n</g>`;
+            }
+
+            const svgFile = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm">${svgBody}</svg>`;
+            
+            const blob = new Blob([svgFile], {type: 'image/svg+xml'});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `if-studio-${mode}-${Date.now()}.svg`;
+            link.click();
+            URL.revokeObjectURL(url);
+            showToast("SVG Generated Successfully!", 'success');
+
+        } catch(e) {
+            console.error("SVG Gen Error", e);
+            showToast("Failed to generate SVG. Try reducing density.", 'error');
+        } finally {
+            setIsProcessing(false);
         }
-        
-        // Use an off-canvas square base for pixel reading consistency
-        const offCanvas = document.createElement('canvas');
-        offCanvas.width = maxNativeDim; 
-        offCanvas.height = maxNativeDim;
-        const offCtx = offCanvas.getContext('2d');
-        
-        // Image drawing math remains relative to the square canvas
-        const imgAspect = img.width / img.height;
-        let drawW, drawH;
-        if (imgAspect > 1) { drawH = offCanvas.height * scale; drawW = drawH * imgAspect; } 
-        else { drawW = offCanvas.width * scale; drawH = drawW / imgAspect; }
-        
-        const centerX = offCanvas.width / 2;
-        const centerY = offCanvas.height / 2;
-        const shiftX = ((panX - 50) / 100) * offCanvas.width * 2;
-        const shiftY = ((panY - 50) / 100) * offCanvas.height * 2;
-        const drawX = centerX - (drawW / 2) + shiftX;
-        const drawY = centerY - (drawH / 2) + shiftY;
-
-        offCtx.save();
-        offCtx.drawImage(img, drawX, drawY, drawW, drawH);
-        offCtx.restore();
-
-        const imageData = offCtx.getImageData(0,0, offCanvas.width, offCanvas.height).data;
-        
-        const getLuma = (x, y) => {
-             // In a real implementation, this function would sample the pixel data
-             return 0.5; // Placeholder value
-        };
-        
-        // --- SVG PATH GENERATION (Simplified Placeholder) ---
-        // NOTE: Full vectorization requires complex path tracing (e.g., Marching Squares or custom contour tracing)
-        // which is too extensive for this sandbox environment. The current SVG output is a non-functional placeholder.
-        
-        let boundaryW = (frameShape === 'custom' || frameShape === 'square') ? w : maxNativeDim;
-        let boundaryH = (frameShape === 'custom' || frameShape === 'square') ? h : maxNativeDim;
-
-        // Draw a simple placeholder shape based on the frame type
-        let svgContent = '';
-        if (frameShape === 'circle') {
-             // SVG circle is centered at W/2, H/2 with radius H/2
-             svgContent = `<circle cx="${w/2}" cy="${h/2}" r="${h/2}" fill="${fgColor}" opacity="0.5" />`;
-        } else {
-             // SVG rectangle
-             svgContent = `<rect x="0" y="0" width="${w}" height="${h}" fill="${fgColor}" opacity="0.5" />`;
-        }
-        
-
-        const svgFile = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${svgContent}
-        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="20" fill="#FFFFFF" font-family="sans-serif">Vector Placeholder</text>
-        </svg>`;
-        
-        const blob = new Blob([svgFile], {type: 'image/svg+xml'});
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `if-studio-${mode}.svg`; // Removed multiplier from filename
-        link.click();
-        URL.revokeObjectURL(url);
-
-
-    } catch(e) {
-        console.error("SVG Gen Error", e);
-        showToast("Failed to generate SVG. Try reducing density.", 'error');
-    }
-    setIsProcessing(false);
+    }, 100); // Short delay to allow UI to update state to "Processing"
   };
     
   const downloadPNG = (multiplier) => { // Multiplier argument is now 1 (Native) or 2 (Double)
@@ -1043,7 +1597,7 @@ export default function IFStudio() {
             finalCtx.drawImage(
                 offCanvas, 
                 sourceX, sourceY, w, h, // Source rectangle
-                0, 0, w, h               // Destination rectangle
+                0, 0, w, h                // Destination rectangle
             );
             
             // Trigger download
@@ -1089,7 +1643,30 @@ export default function IFStudio() {
                     <ModeButton active={mode === 'spiral'} onClick={() => setMode('spiral')} icon={Disc} label="Spiral" />
                     <ModeButton active={mode === 'lines'} onClick={() => setMode('lines')} icon={Layers} label="Lines" />
                     <ModeButton active={mode === 'dots'} onClick={() => setMode('dots')} icon={Grid} label="Dots" />
+                    <ModeButton active={mode === 'stipple'} onClick={() => setMode('stipple')} icon={Sparkles} label="Stipple" />
+                    <ModeButton active={mode === 'flow'} onClick={() => setMode('flow')} icon={Waves} label="Flow" />
                 </div>
+
+                {/* NEW: Quick Presets Section */}
+                <div className="mb-4">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Quick Presets</span>
+                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200">
+                        {PRESETS.map(preset => {
+                            const PIcon = preset.icon;
+                            return (
+                                <button 
+                                    key={preset.id}
+                                    onClick={() => applyPreset(preset)}
+                                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-lg text-xs whitespace-nowrap transition-colors text-gray-600 hover:text-blue-600"
+                                >
+                                    <PIcon size={12} />
+                                    <span className="font-medium">{preset.label}</span>
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+
                 {/* CONSOLIDATED PATTERN SETTINGS SECTION */}
                 <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
                     {mode === 'dots' && (
@@ -1113,12 +1690,13 @@ export default function IFStudio() {
                         highlight 
                         label={currentLabels.density} 
                         value={rings} 
-                        min={10} max={200} step={1} 
+                        // INCREASED RANGE: Up to 500 for Stipple (400k points), 200 for others
+                        min={10} max={mode === 'stipple' ? 500 : 200} step={1} 
                         onChange={(v) => updateSetting('rings', v)} 
                         icon={Circle}
                         tooltip={currentLabels.densityTooltip} 
                         onReset={handleSliderReset}
-                        resetValue={DEFAULT_PATTERN_SETTINGS.rings}
+                        resetValue={mode === 'stipple' ? 150 : DEFAULT_PATTERN_SETTINGS.rings}
                         settingKey="rings"
                     />
                     <Slider 
@@ -1133,28 +1711,30 @@ export default function IFStudio() {
                         resetValue={DEFAULT_PATTERN_SETTINGS.thickness}
                         settingKey="thickness"
                     />
-                    <Slider 
-                        label="Rotation" 
-                        value={rotation} 
-                        min={0} max={180} step={1} 
-                        onChange={(v) => updateSetting('rotation', v)} 
-                        icon={RefreshCw} 
-                        onReset={handleSliderReset}
-                        resetValue={DEFAULT_PATTERN_SETTINGS.rotation}
-                        settingKey="rotation"
-                    />
+                    {mode !== 'stipple' && mode !== 'flow' && (
+                        <Slider 
+                            label="Rotation" 
+                            value={rotation} 
+                            min={0} max={180} step={1} 
+                            onChange={(v) => updateSetting('rotation', v)} 
+                            icon={RefreshCw} 
+                            onReset={handleSliderReset}
+                            resetValue={DEFAULT_PATTERN_SETTINGS.rotation}
+                            settingKey="rotation"
+                        />
+                    )}
                 </section>
               </>
           );
           case 'tune': return (
               <>
-                   <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-4">
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Fine Tune</span>
                         <button onClick={resetView} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset View">
                                     <RotateCcw size={14}/>
                         </button>
-                   </div>
-                   <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                    </div>
+                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
                         <div className="grid grid-cols-2 gap-3">
                            <Slider 
                                 label="Contrast" 
@@ -1188,20 +1768,65 @@ export default function IFStudio() {
                               resetValue={0}
                               settingKey="centerHole"
                           />
-                   </div>
+                          <Slider 
+                              label="Border Thickness" 
+                              tooltip="Add a solid ring/border around the edge of the pattern."
+                              value={borderWidth} 
+                              min={0} 
+                              max={10} 
+                              step={0.1} 
+                              onChange={setBorderWidth} 
+                              icon={Frame} 
+                              onReset={handleSliderReset}
+                              resetValue={0}
+                              settingKey="borderWidth"
+                          />
+                    </div>
               </>
           );
           case 'color': return (
               <div className="space-y-3">
                   <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Color</span>
-                        <button onClick={() => {setFgColor('#000000'); setInvert(false); showToast("Colors Reset");}} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset Colors">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Color & Layers</span>
+                        <button onClick={() => {setFgColor('#000000'); setInvert(false); setColorMode('mono'); showToast("Colors Reset");}} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset Colors">
                                     <RotateCcw size={14}/>
                         </button>
                   </div>
+                  
+                  {/* COLOR MODE SELECTOR */}
+                  <div className="flex p-1 bg-gray-100 rounded-lg mb-4">
+                      <button onClick={() => setColorMode('mono')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'mono' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Monochrome</button>
+                      <button onClick={() => setColorMode('cmyk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'cmyk' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>CMYK Layers</button>
+                  </div>
+
                   <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                      <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColor} />
-                      <Toggle label="Invert Brightness" active={invert} onToggle={() => setInvert(!invert)} icon={Zap} />
+                      {colorMode === 'mono' ? (
+                          <>
+                            <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColor} />
+                            <Toggle label="Invert Brightness" active={invert} onToggle={() => setInvert(!invert)} icon={Zap} />
+                          </>
+                      ) : (
+                          <div className="space-y-4">
+                              <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Active Ink Layers</div>
+                              <div className="grid grid-cols-4 gap-2">
+                                  {['c','m','y','k'].map(k => (
+                                      <button 
+                                        key={k}
+                                        onClick={() => setActiveLayers(p => ({...p, [k]: !p[k]}))}
+                                        className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${activeLayers[k] ? 'bg-white border-current' : 'bg-gray-50 border-gray-100 opacity-50'}`}
+                                        style={{ color: activeLayers[k] ? (k==='k'?'#000':CMYK_COLORS[k]) : '#9ca3af', borderColor: activeLayers[k] ? (k==='y' ? '#EAB308' : (k==='k'?'#000':CMYK_COLORS[k])) : '' }}
+                                      >
+                                          <div className="w-4 h-4 rounded-full mb-1" style={{backgroundColor: k==='k'?'#000':CMYK_COLORS[k]}}/>
+                                          <span className="text-xs font-bold uppercase">{k}</span>
+                                      </button>
+                                  ))}
+                              </div>
+                              <div className="p-3 bg-blue-50 text-blue-800 text-[10px] rounded-lg">
+                                  <p><strong>Note:</strong> CMYK mode generates 4 overlapping patterns rotated at standard angles (15°, 75°, 0°, 45°) to mix colors. Exporting SVG will create grouped layers for easy plotting.</p>
+                              </div>
+                              <Toggle label="Invert Brightness" active={invert} onToggle={() => setInvert(!invert)} icon={Zap} />
+                          </div>
+                      )}
                   </section>
               </div>
           );
@@ -1238,7 +1863,7 @@ export default function IFStudio() {
                           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Download Files (Native Resolution)</span>
                           <div className="grid grid-cols-2 gap-2">
                               {/* Final Export Buttons (1x Native Resolution) */}
-                              <button onClick={() => downloadSVG(1)} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm disabled:opacity-50 transition-colors">
+                              <button onClick={() => downloadSVG()} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm disabled:opacity-50 transition-colors">
                                    <Layers size={14} className="mb-0.5" /> SVG (Vector)
                               </button>
                               <button onClick={() => downloadPNG(1)} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm disabled:opacity-50 transition-colors">
@@ -1272,17 +1897,17 @@ export default function IFStudio() {
                         <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-200 animate-in fade-in space-y-3">
                             <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Aspect Ratio (W:H)</span>
                             <div className="flex gap-2">
-                                <input
-                                    type="number"
-                                    value={cropAspectW}
+                                <input 
+                                    type="number" 
+                                    value={cropAspectW} 
                                     onChange={(e) => setCropAspectW(Math.max(1, parseInt(e.target.value) || 1))}
                                     min="1"
                                     className="w-1/2 p-2 text-sm text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
                                     aria-label="Custom Aspect Ratio Width"
                                 />
-                                <input
-                                    type="number"
-                                    value={cropAspectH}
+                                <input 
+                                    type="number" 
+                                    value={cropAspectH} 
                                     onChange={(e) => setCropAspectH(Math.max(1, parseInt(e.target.value) || 1))}
                                     min="1"
                                     className="w-1/2 p-2 text-sm text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
@@ -1334,17 +1959,26 @@ export default function IFStudio() {
       
       // We set the top padding of the flex container to the header height (pt-12 = 48px)
       // We set the bottom padding of the flex container dynamically.
-      paddingBottom: isMobileDrawerOpen ? `calc(${MOBILE_DRAWER_HEIGHT} + ${MOBILE_NAV_HEIGHT + 20}px)` : `${MOBILE_NAV_HEIGHT}px`,
+      paddingBottom: isMobileDrawerOpen ? `calc(${MOBILE_DRAWER_HEIGHT} + ${MOBILE_NAV_HEIGHT + 1}px)` : `${MOBILE_NAV_HEIGHT}px`,
       minHeight: '100%',
       // The canvas itself will take up the remaining space dynamically
   } : {};
 
 
   return (
-    <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }}>
+    <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
 
       <StatusToast toast={toast} onClose={() => setToast({ message: null, type: 'info' })} />
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
+
+      {/* Drag & Drop Visual Overlay */}
+      {isDragOver && (
+          <div className="fixed inset-0 z-[100] bg-blue-600/90 backdrop-blur-sm flex flex-col items-center justify-center animate-in fade-in duration-200 pointer-events-none">
+              <Upload size={64} className="text-white mb-4 animate-bounce" />
+              <h2 className="text-3xl font-bold text-white tracking-tight">Drop Image Here</h2>
+              <p className="text-blue-100 mt-2">Release to upload instantly</p>
+          </div>
+      )}
 
       {/* MOBILE HEADER - ALWAYS VISIBLE (Fixed Top) */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40">
@@ -1450,21 +2084,21 @@ export default function IFStudio() {
                 {/* Edit Overlay Controls */}
                 {step === 'edit' && (
                     <>
-                         <button 
+                          <button 
                              className="absolute top-4 right-4 bg-white hover:bg-gray-50 text-gray-600 p-2 md:p-3 rounded-full border border-gray-200 shadow-lg transition-all active:scale-95 z-50 group"
                              onMouseDown={() => setCompareMode(true)}
                              onMouseUp={() => setCompareMode(false)}
                              onTouchStart={() => setCompareMode(true)}
                              onTouchEnd={() => setCompareMode(false)}
-                         >
+                          >
                              {compareMode ? <Eye size={18} className="md:w-5 md:h-5" /> : <EyeOff size={18} className="md:w-5 md:h-5" />}
-                         </button>
-                         <button 
+                          </button>
+                          <button 
                              className="absolute top-4 left-4 bg-white hover:bg-gray-50 text-gray-600 p-2 md:p-3 rounded-full border border-gray-200 shadow-lg transition-all active:scale-95 z-50 group"
                              onClick={handleDoubleClick} // Uses handleDoubleClick to sync state before switching
-                           >
+                            >
                               <Crop size={18} className="md:w-5 md:h-5" />
-                         </button>
+                          </button>
                     </>
                 )}
             </div> 
@@ -1499,11 +2133,11 @@ export default function IFStudio() {
            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
               {activeCropTab && (
                   <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[40vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
-                       <div className="flex justify-between items-center mb-3">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeCropTab} controls</span>
-                            {/* Removed close icon (X) as requested */}
-                       </div>
-                       {renderMobileCropControls(activeCropTab)}
+                        <div className="flex justify-between items-center mb-3">
+                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeCropTab} controls</span>
+                             {/* Removed close icon (X) as requested */}
+                        </div>
+                        {renderMobileCropControls(activeCropTab)}
                   </div>
               )}
               <div className="flex justify-between items-center h-16 p-3 bg-white">
@@ -1529,4 +2163,3 @@ export default function IFStudio() {
     </div>
   );
 }
-
