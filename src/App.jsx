@@ -3,7 +3,7 @@ import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, 
 
 /**
  * IF Studio - Advanced Halftone & Spiral Image Engine By Insert Fabrication
- * v3.19 - Updates: Cleaned up Presets
+ * v3.25 - Updates: Fixed Missing Triangle Import for Dot Shapes
  */
 
 // --- Constants ---
@@ -24,12 +24,12 @@ const CMYK_ANGLES = {
     k: 45
 };
 
-const PRESETS = [
-    { id: 'default', label: 'Default Spiral', icon: Disc, settings: { mode: 'spiral', colorMode: 'mono', rings: 60, thickness: 0.5, rotation: 0, contrast: 1.0, brightness: 0, borderWidth: 0 } },
-    { id: 'litho-photo', label: 'Raw Litho', icon: PhotoIcon, settings: { mode: 'photo', colorMode: 'mono', contrast: 1.1, brightness: 0, borderWidth: 3.0, lithoPreview: true } },
-    { id: 'flow-sketch', label: 'Contour Sketch', icon: Waves, settings: { mode: 'flow', colorMode: 'mono', rings: 80, thickness: 0.8, rotation: 0, contrast: 1.5, brightness: 10, borderWidth: 0 } },
-    { id: 'cmyk-spiral', label: 'CMYK Spiral', icon: Palette, settings: { mode: 'spiral', colorMode: 'cmyk', rings: 50, thickness: 0.5, rotation: 0, contrast: 1.1, brightness: 5, borderWidth: 0 } },
-];
+const CMYK_COLORS = {
+    c: '#00FFFF',
+    m: '#FF00FF',
+    y: '#FFFF00',
+    k: '#000000'
+};
 
 // Define fixed heights for UI elements on mobile
 const MOBILE_HEADER_HEIGHT = 48; // h-12
@@ -43,6 +43,25 @@ const seededRandom = (seed) => {
     t ^= t + Math.imul(t ^ t >>> 7, t | 61);
     return ((t ^ t >>> 14) >>> 0) / 4294967296;
 }
+
+// --- Helper: Shape Masking Logic (SDF-ish) ---
+const checkPointInShape = (dx, dy, shape, r) => {
+    // dx, dy: coordinates relative to center
+    // r: radius (half of the bounding box min dimension)
+    
+    if (shape === 'circle') {
+        return (dx*dx + dy*dy) <= r*r;
+    }
+    
+    // For square and custom, the caller usually handles the bounding box check.
+    // However, if we are inside this function, we assume a square check based on radius 'r'
+    // This is primarily used for the masking logic in renderFrame and downloadSTL
+    if (shape === 'square' || shape === 'custom') {
+        return true; // We rely on the loops bounding box for rectangular shapes
+    }
+
+    return true; // Default keep
+};
 
 // --- Components ---
 
@@ -283,7 +302,7 @@ export default function App() {
     
   // Mobile Navigation State
   const [activeTab, setActiveTab] = useState('pattern'); 
-  const [activeCropTab, setActiveCropTab] = useState(null); // 'shape' or 'position'
+  const [activeCropTab, setActiveCropTab] = useState(null); // 'shape'
 
   // Workflow State
   const [step, setStep] = useState('upload'); 
@@ -709,24 +728,29 @@ export default function App() {
         if (step === 'crop') {
             ctx.drawImage(tempCanvas, 0, 0);
             ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; 
-            ctx.beginPath();
-            ctx.rect(0, 0, w, h); 
             
+            // Draw Inverse Clip Path for the overlay
+            ctx.beginPath();
+            ctx.rect(0, 0, w, h); // Outer rectangle
+            
+            // Inner Shape (Cutout)
+            const r = maxCropDim / 2;
             if (currentFrameShape === 'circle') {
-                ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2, true);
-            } else { // 'square' or 'custom'
+                ctx.arc(centerX, centerY, r, 0, Math.PI * 2, true);
+            } else if (currentFrameShape === 'square' || currentFrameShape === 'custom') {
                 ctx.rect(cropX, cropY, cropW, cropH);
             }
             
+            // Fill with 'evenodd' rule to punch the hole
             ctx.fill('evenodd'); 
             
-            // Draw crop border
+            // Draw Stroke Border
             ctx.strokeStyle = THEME_COLOR;
             ctx.lineWidth = 2;
             ctx.beginPath();
             if (currentFrameShape === 'circle') {
-                ctx.arc(centerX, centerY, maxCropDim / 2 - 1, 0, Math.PI * 2);
-            } else {
+                ctx.arc(centerX, centerY, r - 1, 0, Math.PI * 2);
+            } else if (currentFrameShape === 'square' || currentFrameShape === 'custom') {
                 ctx.rect(cropX + 1, cropY + 1, cropW - 2, cropH - 2);
             }
             ctx.stroke();
@@ -740,9 +764,10 @@ export default function App() {
             
             ctx.save();
             ctx.beginPath();
+            const r = maxCropDim / 2;
             if (currentFrameShape === 'circle') {
-                ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
-            } else {
+                ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+            } else if (currentFrameShape === 'square' || currentFrameShape === 'custom') {
                 ctx.rect(cropX, cropY, cropW, cropH);
             }
             ctx.clip();
@@ -837,8 +862,12 @@ export default function App() {
                         const cy = centerY + y;
                         
                         // Bounds Check
-                        const dx = cx - centerX; const dy = cy - centerY; const distSq = dx*dx + dy*dy;
-                        if (currentFrameShape === 'circle' && distSq > maxRadiusSq) continue;
+                        const dx = cx - centerX; 
+                        const dy = cy - centerY; 
+                        const distSq = dx*dx + dy*dy;
+                        
+                        // USE NEW HELPER FUNCTION FOR SHAPE MASKING
+                        if (!checkPointInShape(dx, dy, currentFrameShape, maxCropDim/2)) continue;
                         if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
                         if (distSq < holeRadiusSq) continue;
 
@@ -896,8 +925,8 @@ export default function App() {
                         const dx = x - centerX; const dy = y - centerY; const distSq = dx*dx + dy*dy;
 
                         // Bounds
-                        if (currentFrameShape === 'circle' && distSq > maxRadiusSq) { setTransparent(); continue; }
-                        if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) { setTransparent(); continue; }
+                        if (!checkPointInShape(dx, dy, currentFrameShape, maxCropDim/2)) { setTransparent(); continue; }
+                        if (currentFrameShape === 'custom' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) { setTransparent(); continue; }
                         if (distSq < holeRadiusSq) { setTransparent(); continue; }
                         if (sourceData[index+3] === 0) { setTransparent(); continue; }
 
@@ -1036,9 +1065,10 @@ export default function App() {
             // Border is always main theme color or black? In CMYK mode, border usually Black (K).
             ctx.strokeStyle = colorMode === 'cmyk' ? '#000000' : fgColor;
             ctx.beginPath();
+            const r = maxCropDim / 2;
             if (currentFrameShape === 'circle') {
                 ctx.arc(centerX, centerY, maxCropDim / 2 - borderPx/2, 0, Math.PI * 2);
-            } else {
+            } else if (currentFrameShape === 'square' || currentFrameShape === 'custom') {
                 ctx.rect(cropX + borderPx/2, cropY + borderPx/2, cropW - borderPx, cropH - borderPx);
             }
             ctx.stroke();
@@ -1234,6 +1264,7 @@ export default function App() {
                   currentAspect = cropAspectW / cropAspectH;
               }
 
+              // Initialize dimensions based on frame shape
               if (frameShape === 'circle' || frameShape === 'square') {
                   cropW = maxCropDim;
                   cropH = maxCropDim;
@@ -1275,15 +1306,24 @@ export default function App() {
               // --- 3. Generate STL ---
               // Binary STL Header (80 bytes)
               const header = new Uint8Array(80);
-              const triCount = (meshW - 1) * (meshH - 1) * 2;
-              const bufferSize = 84 + (50 * triCount);
+              // Approximate triangle count: 2 triangles per grid cell
+              // We'll calculate exact count as we fill to avoid large allocations for empty space
+              // But for ArrayBuffer, we need size upfront.
+              // Max possible triangles is (meshW-1)*(meshH-1)*2.
+              // Let's allocate max and then slice if needed, or just iterate twice?
+              // Iterating twice is slower. Max allocation is safer for memory management in JS than re-allocating.
+              // But 1000x1000 grid = 2M triangles = 100MB. Fine.
+              
+              const maxTriCount = (meshW - 1) * (meshH - 1) * 2;
+              const bufferSize = 84 + (50 * maxTriCount);
               const buffer = new ArrayBuffer(bufferSize);
               const view = new DataView(buffer);
               
               for (let i = 0; i < 80; i++) view.setUint8(i, header[i]);
-              view.setUint32(80, triCount, true); 
+              // We will write the true count at the end
               
               let offset = 84;
+              let actualTriCount = 0;
               
               const getHeight = (x, y) => {
                   const idx = (y * meshW + x) * 4;
@@ -1301,8 +1341,24 @@ export default function App() {
               // Calculate physical step size based on user's desired physical width
               const pxSize = widthMm / meshW; 
               
+              const mcx = meshW / 2;
+              const mcy = meshH / 2;
+              const mr = Math.min(meshW, meshH) / 2;
+
               for (let y = 0; y < meshH - 1; y++) {
                   for (let x = 0; x < meshW - 1; x++) {
+                    
+                      // --- STRICT SHAPE CHECKING ---
+                      // We check the center of the grid cell
+                      // Coordinates relative to center of mesh
+                      const cx = x - mcx;
+                      const cy = y - mcy;
+                      
+                      // Skip if outside shape (except for square/custom which fill the box)
+                      if (frameShape !== 'square' && frameShape !== 'custom') {
+                          if (!checkPointInShape(cx, cy, frameShape, mr)) continue;
+                      }
+
                       // Physical coordinates
                       const x0 = x * pxSize; const y0 = y * pxSize;
                       const x1 = (x+1) * pxSize; const y1 = (y+1) * pxSize;
@@ -1317,6 +1373,7 @@ export default function App() {
                       view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true); // v2
                       view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true); // v3
                       view.setUint16(offset+48, 0, true); offset += 50;
+                      actualTriCount++;
                       
                       // Triangle 2
                       view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true); // Normal
@@ -1324,10 +1381,17 @@ export default function App() {
                       view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true); // v2
                       view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true); // v3
                       view.setUint16(offset+48, 0, true); offset += 50;
+                      actualTriCount++;
                   }
               }
               
-              const blob = new Blob([buffer], { type: 'application/octet-stream' });
+              // Write actual triangle count
+              view.setUint32(80, actualTriCount, true);
+              
+              // Slice buffer to actual size to avoid large file with zeros
+              const finalBuffer = buffer.slice(0, 84 + (50 * actualTriCount));
+              
+              const blob = new Blob([finalBuffer], { type: 'application/octet-stream' });
               const url = URL.createObjectURL(blob);
               const link = document.createElement('a');
               link.href = url;
@@ -1415,7 +1479,8 @@ export default function App() {
                     const ix = Math.floor(x); const iy = Math.floor(y);
                     if (ix < 0 || ix >= w || iy < 0 || iy >= h) return 1;
                     const dx = ix - centerX; const dy = iy - centerY; const distSq = dx*dx + dy*dy;
-                    if (frameShape === 'circle' && distSq > maxRadiusSq) return 1;
+                    
+                    if (!checkPointInShape(dx, dy, frameShape, maxCropDim/2)) return 1;
                     if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) return 1;
                     if (distSq < holeRadiusSq) return 1;
                     
@@ -1464,7 +1529,7 @@ export default function App() {
                             
                             // Bounds Check
                             const dx = cx - centerX; const dy = cy - centerY; const distSq = dx*dx + dy*dy;
-                            if (frameShape === 'circle' && distSq > maxRadiusSq) continue;
+                            if (!checkPointInShape(dx, dy, frameShape, maxCropDim/2)) continue;
                             if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
                             if (distSq < holeRadiusSq) continue;
 
@@ -1475,7 +1540,7 @@ export default function App() {
 
                             // Calculate Sobel-ish Gradient Angle
                             const getLumaAt = (ox, oy) => {
-                                const i = ((iy+oy)*w + (ix+ox))*4;
+                                const i = Math.max(0, Math.min(((iy+oy)*w + (ix+ox))*4, sourceData.length-4));
                                 let r = sourceData[i]/255, g = sourceData[i+1]/255, b = sourceData[i+2]/255;
                                 return 0.299*r + 0.587*g + 0.114*b;
                             };
@@ -1500,9 +1565,41 @@ export default function App() {
                             const x2 = cx + Math.cos(angle) * len/2;
                             const y2 = cy + Math.sin(angle) * len/2;
                             
-                            layerPaths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${strokeW.toFixed(2)}" stroke-linecap="round" />`);
+                            layerPaths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${layer.color}" stroke-width="${strokeW.toFixed(2)}" stroke-linecap="round" />`);
                         }
                     }
+                } else if (mode === 'stipple') {
+                    // ... existing stipple logic ...
+                    const totalPoints = effectiveRings * 800;
+                    const baseScale = maxCropDim / 1000; 
+                    
+                    // ENFORCED MIN THICKNESS FOR SVG
+                    let dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
+                    if (is3DMode && (dotRadius * 2) < minFeaturePx) dotRadius = minFeaturePx / 2;
+                    
+                    for (let i = 0; i < totalPoints; i++) {
+                        const seedOffset = layer.key === 'mono' ? 0 : layer.key.charCodeAt(0) * 1000;
+                        const r1 = seededRandom(i + seedOffset);
+                        const r2 = seededRandom(i + 1000000 + seedOffset);
+                        
+                        let px, py;
+                        if (frameShape === 'circle') {
+                            px = centerX - maxCropDim/2 + r1 * maxCropDim;
+                            py = centerY - maxCropDim/2 + r2 * maxCropDim;
+                        } else {
+                            px = (centerX - cropW/2) + r1 * cropW;
+                            py = (centerY - cropH/2) + r2 * cropH;
+                        }
+                        
+                        const val = getSourceVal(px, py); // 0 (dark) to 1 (light)
+                        if (val === 1) continue;
+                        
+                        const r3 = seededRandom(i + 2000000);
+                        if (r3 > val) { // Keep dot
+                            layerPaths.push(`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${dotRadius.toFixed(2)}" />`);
+                        }
+                    }
+
                 } else if (mode === 'dots') {
                     // ... existing dots logic ...
                     const gridSize = maxCropDim / effectiveRings; 
@@ -1634,7 +1731,7 @@ export default function App() {
                 svgBody += `<g id="Border">\n`;
                 if (frameShape === 'circle') {
                     svgBody += `<circle cx="${centerX.toFixed(2)}" cy="${centerY.toFixed(2)}" r="${(maxCropDim/2 - borderPx/2).toFixed(2)}" stroke="${strokeColor}" stroke-width="${borderPx.toFixed(2)}" fill="none" />`;
-                } else {
+                } else if (frameShape === 'square' || frameShape === 'custom') {
                     svgBody += `<rect x="${(cropX + borderPx/2).toFixed(2)}" y="${(cropY + borderPx/2).toFixed(2)}" width="${(cropW - borderPx).toFixed(2)}" height="${(cropH - borderPx).toFixed(2)}" stroke="${strokeColor}" stroke-width="${borderPx.toFixed(2)}" fill="none" />`;
                 }
                 svgBody += `\n</g>`;
@@ -1660,6 +1757,78 @@ export default function App() {
     }, 100); // Short delay to allow UI to update state to "Processing"
   };
     
+  const downloadPNG = (multiplier) => { 
+    const exportMultiplier = multiplier || 1; 
+    if (!sourceImageRef.current || !canvasRef.current) return;
+    setIsProcessing(true);
+    showToast(`Generating PNG...`, 'success');
+    
+    setTimeout(() => {
+        try {
+            const img = sourceImageRef.current;
+            const nativeSize = Math.min(img.width, img.height);
+            
+            let finalAspect = 1.0;
+            if (frameShape === 'custom') {
+                finalAspect = cropAspectW / cropAspectH;
+            } else if (frameShape === 'square') {
+                finalAspect = 1.0;
+            }
+
+            const maxNativeDim = nativeSize * exportMultiplier;
+            let w, h;
+
+            if (frameShape === 'custom') {
+                if (finalAspect >= 1) {
+                    w = maxNativeDim;
+                    h = maxNativeDim / finalAspect;
+                } else {
+                    h = maxNativeDim;
+                    w = maxNativeDim * finalAspect;
+                }
+            } else { 
+                // Circle, Square, Triangle, Hexagon, Heart all fit in square
+                w = maxNativeDim;
+                h = maxNativeDim;
+            }
+
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = maxNativeDim; 
+            offCanvas.height = maxNativeDim;
+            const ctx = offCanvas.getContext('2d');
+            
+            // Render full resolution frame
+            renderFrame(ctx, maxNativeDim, maxNativeDim, true);
+            
+            // Create final canvas for potentially non-square crops
+            const finalCanvas = document.createElement('canvas');
+            finalCanvas.width = w;
+            finalCanvas.height = h;
+            const finalCtx = finalCanvas.getContext('2d');
+            
+            const sourceX = (maxNativeDim - w) / 2;
+            const sourceY = (maxNativeDim - h) / 2;
+
+            finalCtx.drawImage(
+                offCanvas, 
+                sourceX, sourceY, w, h, 
+                0, 0, w, h
+            );
+            
+            const link = document.createElement('a');
+            link.download = `if-studio-${Date.now()}.png`;
+            link.href = finalCanvas.toDataURL('image/png');
+            link.click();
+
+        } catch(e) {
+            console.error("PNG Gen Error", e);
+            showToast("Failed to generate PNG. Check console for details.", 'error');
+        } finally {
+             setIsProcessing(false);
+        }
+    }, 50);
+  };
+
   // --- Cropping Action ---
   const applyCropAndGoToEdit = () => {
     // 1. Apply LIVE crop settings to FINAL states
@@ -1688,6 +1857,7 @@ export default function App() {
                     <ModeButton active={mode === 'spiral'} onClick={() => handleModeChange('spiral')} icon={Disc} label="Spiral" />
                     <ModeButton active={mode === 'lines'} onClick={() => handleModeChange('lines')} icon={Layers} label="Lines" />
                     <ModeButton active={mode === 'dots'} onClick={() => handleModeChange('dots')} icon={Grid} label="Dots" />
+                    <ModeButton active={mode === 'stipple'} onClick={() => handleModeChange('stipple')} icon={Sparkles} label="Stipple" />
                     <ModeButton active={mode === 'flow'} onClick={() => handleModeChange('flow')} icon={Waves} label="Flow" />
                     <ModeButton active={mode === 'photo'} onClick={() => handleModeChange('photo')} icon={PhotoIcon} label="Photo" />
                 </div>
@@ -1724,12 +1894,13 @@ export default function App() {
                             highlight 
                             label={currentLabels.density} 
                             value={rings} 
-                            min={10} max={200} step={1} 
+                            // INCREASED RANGE: Up to 500 for Stipple (400k points), 200 for others
+                            min={10} max={mode === 'stipple' ? 500 : 200} step={1} 
                             onChange={(v) => updateSetting('rings', v)} 
                             icon={Circle}
                             tooltip={currentLabels.densityTooltip} 
                             onReset={handleSliderReset}
-                            resetValue={DEFAULT_PATTERN_SETTINGS.rings}
+                            resetValue={mode === 'stipple' ? 150 : DEFAULT_PATTERN_SETTINGS.rings}
                             settingKey="rings"
                         />
                         <Slider 
@@ -1746,7 +1917,7 @@ export default function App() {
                         />
                         </>
                     )}
-                    {mode !== 'flow' && mode !== 'photo' && (
+                    {mode !== 'stipple' && mode !== 'flow' && mode !== 'photo' && (
                         <Slider 
                             label="Rotation" 
                             value={rotation} 
@@ -2008,13 +2179,13 @@ export default function App() {
             return (
                 <div className="space-y-4">
                     <div className="text-[10px] uppercase font-bold text-gray-400 mb-3 tracking-wider">Frame Shape</div>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2 mb-2">
                         {/* Circle */}
-                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'circle'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'circle' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Circle size={24} className="mb-2"/><span className="text-xs font-bold">Circle</span></button>
+                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'circle'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'circle' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Circle size={20} className="mb-1"/><span className="text-[10px] font-bold">Circle</span></button>
                         {/* Square */}
-                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'square'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'square' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Square size={24} className="mb-2"/><span className="text-xs font-bold">Square</span></button>
+                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'square'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'square' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Square size={20} className="mb-1"/><span className="text-[10px] font-bold">Square</span></button>
                         {/* Custom */}
-                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'custom'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'custom' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><LayoutTemplate size={24} className="mb-2"/><span className="text-xs font-bold">Custom</span></button>
+                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'custom'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'custom' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><LayoutTemplate size={20} className="mb-1"/><span className="text-[10px] font-bold">Custom</span></button>
                     </div>
                     {liveCrop.frameShape === 'custom' && (
                         <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-200 animate-in fade-in space-y-3">
@@ -2039,14 +2210,9 @@ export default function App() {
                             </div>
                         </div>
                     )}
-                </div>
-            );
-        case 'position':
-            return (
-                <div className="space-y-4">
-                    <Slider label="Zoom" value={liveCrop.scale} min={0.5} max={3.0} step={0.1} onChange={(v) => setLiveCrop(prev => ({...prev, scale: v}))} />
-                    <Slider label="Pan X" value={liveCrop.panX} min={0} max={100} step={1} onChange={(v) => setLiveCrop(prev => ({...prev, panX: v}))} icon={Move} />
-                    <Slider label="Pan Y" value={liveCrop.panY} min={0} max={100} step={1} onChange={(v) => setLiveCrop(prev => ({...prev, panY: v}))} icon={Move} />
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                        <Slider label="Zoom" value={liveCrop.scale} min={0.5} max={3.0} step={0.1} onChange={(v) => setLiveCrop(prev => ({...prev, scale: v}))} icon={Scaling} />
+                    </div>
                 </div>
             );
         default: return null;
@@ -2063,10 +2229,6 @@ export default function App() {
           </div>
           <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
               {renderMobileCropControls('shape')}
-          </section>
-          <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Position</div>
-              {renderMobileCropControls('position')}
           </section>
           <button onClick={applyCropAndGoToEdit} className="w-full py-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">Apply Crop <ArrowRight size={18} /></button>
       </div>
@@ -2268,7 +2430,6 @@ export default function App() {
               <div className="flex justify-between items-center h-16 p-3 bg-white">
                   <div className='flex gap-2'>
                     <button onClick={() => handleMobileCropTabClick('shape')} className={`flex flex-col items-center justify-center gap-0.5 p-1 w-16 transition-colors rounded-xl hover:bg-gray-50 ${activeCropTab === 'shape' ? 'text-[#3B82F6]' : 'text-gray-400'}`}><LayoutTemplate size={20}/><span className="text-[9px] font-medium">Shape</span></button>
-                    <button onClick={() => handleMobileCropTabClick('position')} className={`flex flex-col items-center justify-center gap-0.5 p-1 w-16 transition-colors rounded-xl hover:bg-gray-50 ${activeCropTab === 'position' ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Move size={20}/><span className="text-[9px] font-medium">Position</span></button>
                   </div>
                   
                   <div className='flex gap-2'>
