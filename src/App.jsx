@@ -346,6 +346,25 @@ export default function IFStudio() {
   const helperCanvasRef = useRef(null);
 
   // --- Actions ---
+  
+  // FIX: Custom Viewport Height Logic for Mobile (Addressing 100vh issue)
+  useEffect(() => {
+    // Function to calculate and set the viewport height variable
+    const setVh = () => {
+      // We calculate 1% of the viewport height
+      const vh = window.innerHeight * 0.01; 
+      // And set it as a CSS variable for global use
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    setVh(); // Set on initial mount
+    window.addEventListener('resize', setVh); // Set on resize (e.g., orientation change or browser UI change)
+
+    // Clean up the event listener
+    return () => window.removeEventListener('resize', setVh);
+  }, []);
+  // END FIX
+
   useEffect(() => {
       if (window.innerWidth < 768) {
           setSidebarOpen(false);
@@ -634,13 +653,13 @@ export default function IFStudio() {
         const effectiveRings = Math.max(1, rings); 
         const radRotation = (rotation * PI) / 180;
         
-        const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
-        const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
-        
         // Define half dimensions for current frame shape boundaries
         const halfCropW = cropW / 2;
         const halfCropH = cropH / 2;
-
+        
+        const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
+        const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
+        
         const fgR = fg.r, fgG = fg.g, fgB = fg.b;
         const pxPerMm = w / 200; // Default 200mm width if input hidden
         const minFeaturePx = is3DMode ? (minThickness * pxPerMm) : 0;
@@ -1290,7 +1309,11 @@ export default function IFStudio() {
   );
 
   return (
-    <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }}>
+    // FIX: Replaced h-screen with custom height calculation using --vh 
+    <div 
+        className="flex w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" 
+        style={{ height: 'calc(var(--vh, 1vh) * 100)', touchAction: 'none' }}
+    >
 
       <StatusToast toast={toast} onClose={() => setToast({ message: null, type: 'info' })} />
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
@@ -1463,6 +1486,8 @@ export default function IFStudio() {
         {step === 'edit' && (
             <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
                 {activeTab && (
+                    // This section uses max-h-[45vh] which is okay as it is scrollable, 
+                    // but the main screen height fix ensures the entire app fits.
                     <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[45vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
                         <div className="flex justify-between items-center mb-3">
                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeTab} controls</span>
