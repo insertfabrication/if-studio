@@ -24,12 +24,12 @@ const CMYK_ANGLES = {
     k: 45
 };
 
-const CMYK_COLORS = {
-    c: '#00FFFF',
-    m: '#FF00FF',
-    y: '#FFFF00',
-    k: '#000000'
-};
+const PRESETS = [
+    { id: 'default', label: 'Default Spiral', icon: Disc, settings: { mode: 'spiral', colorMode: 'mono', rings: 60, thickness: 0.5, rotation: 0, contrast: 1.0, brightness: 0, borderWidth: 0 } },
+    { id: 'litho-photo', label: 'Raw Litho', icon: PhotoIcon, settings: { mode: 'photo', colorMode: 'mono', contrast: 1.1, brightness: 0, borderWidth: 3.0, lithoPreview: true } },
+    { id: 'flow-sketch', label: 'Contour Sketch', icon: Waves, settings: { mode: 'flow', colorMode: 'mono', rings: 80, thickness: 0.8, rotation: 0, contrast: 1.5, brightness: 10, borderWidth: 0 } },
+    { id: 'cmyk-spiral', label: 'CMYK Spiral', icon: Palette, settings: { mode: 'spiral', colorMode: 'cmyk', rings: 50, thickness: 0.5, rotation: 0, contrast: 1.1, brightness: 5, borderWidth: 0 } },
+];
 
 // Define fixed heights for UI elements on mobile
 const MOBILE_HEADER_HEIGHT = 48; // h-12
@@ -302,7 +302,6 @@ export default function App() {
       spiral: DEFAULT_PATTERN_SETTINGS,
       lines:  DEFAULT_PATTERN_SETTINGS,
       dots:   DEFAULT_PATTERN_SETTINGS,
-      stipple: { ...DEFAULT_PATTERN_SETTINGS, rings: 150 }, 
       flow: { ...DEFAULT_PATTERN_SETTINGS, rings: 80, thickness: 0.8 },
       photo: DEFAULT_PATTERN_SETTINGS, // Added photo to initialization
       litho: { resolution: 0.5, widthMm: 100, minDepth: 0.8, maxDepth: 3.0 } // 3D Settings
@@ -331,12 +330,6 @@ export default function App() {
         thickness: "Dot Scale", 
         densityTooltip: "Controls the spacing of the dot grid. Higher = smaller spacing.",
         thicknessTooltip: "Controls the maximum size (scale) of the dots in the lightest areas."
-    },
-    stipple: {
-        density: "Point Count",
-        thickness: "Point Size",
-        densityTooltip: "Controls the total number of attempts to place random dots. Max ~400k points.",
-        thicknessTooltip: "Controls the relative size of the individual stipple dots."
     },
     flow: {
         density: "Stroke Density",
@@ -818,88 +811,6 @@ export default function App() {
             const halfCropW = cropW / 2; 
             const halfCropH = cropH / 2;
 
-            // -- Stipple Optimization for Layers --
-            if (mode === 'stipple') {
-                const totalPoints = effectiveRings * 800; 
-                const baseScale = maxCropDim / 1000; 
-                // ENFORCED MIN THICKNESS FOR 3D MODE
-                let dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
-                if (is3DMode && (dotRadius * 2) < minFeaturePx) dotRadius = minFeaturePx / 2;
-                
-                // Use Multiply blend for CMYK, but standard drawing for Mono/First layer to handle transparency
-                if (colorMode === 'cmyk' && i > 0) {
-                      ctx.globalCompositeOperation = 'multiply';
-                } else {
-                      ctx.globalCompositeOperation = 'source-over';
-                }
-                
-                ctx.fillStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
-                
-                ctx.beginPath(); // Batch paths for performance
-                for (let j = 0; j < totalPoints; j++) {
-                    const r1 = seededRandom(j + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
-                    const r2 = seededRandom(j + 1000000 + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
-                    
-                    let px, py;
-                    if (frameShape === 'circle') {
-                        px = centerX - maxCropDim/2 + r1 * maxCropDim;
-                        py = centerY - maxCropDim/2 + r2 * maxCropDim;
-                    } else {
-                        px = cropX + r1 * cropW;
-                        py = cropY + r2 * cropH;
-                    }
-                    
-                    const dx = px - centerX; const dy = py - centerY; const distSq = dx*dx + dy*dy;
-                    if (frameShape === 'circle' && distSq > maxRadiusSq) continue;
-                    if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
-                    if (distSq < holeRadiusSq) continue;
-
-                    const ix = Math.floor(px); const iy = Math.floor(py);
-                    if (ix < 0 || ix >= w || iy < 0 || iy >= h) continue;
-                    const idx = (iy * w + ix) * 4;
-                    if (sourceData[idx+3] === 0) continue;
-
-                    // Get Value based on Layer
-                    let val = 1.0;
-                    let r = sourceData[idx]/255, g = sourceData[idx+1]/255, b = sourceData[idx+2]/255;
-                    
-                    if (isMono) {
-                        let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
-                        luma += brightness;
-                        luma = (luma - 128) * contrast + 128;
-                        if (luma < 0) luma = 0; if (luma > 255) luma = 255;
-                        val = luma / 255;
-                        if (invert) val = 1.0 - val;
-                    } else {
-                        r = ((r - 0.5) * contrast + 0.5) + (brightness/255);
-                        g = ((g - 0.5) * contrast + 0.5) + (brightness/255);
-                        b = ((b - 0.5) * contrast + 0.5) + (brightness/255);
-                        r = Math.max(0, Math.min(1, r));
-                        g = Math.max(0, Math.min(1, g));
-                        b = Math.max(0, Math.min(1, b));
-
-                        let k = 1 - Math.max(r, g, b);
-                        let c = (1 - r - k) / (1 - k) || 0;
-                        let m = (1 - g - k) / (1 - k) || 0;
-                        let y = (1 - b - k) / (1 - k) || 0;
-                        
-                        if (layer.key === 'c') val = 1 - c;
-                        if (layer.key === 'm') val = 1 - m;
-                        if (layer.key === 'y') val = 1 - y;
-                        if (layer.key === 'k') val = 1 - k;
-                    }
-
-                    const r3 = seededRandom(j + 2000000);
-                    if (r3 > val) { // Keep dot
-                        ctx.moveTo(px + dotRadius, py);
-                        ctx.arc(px, py, dotRadius, 0, Math.PI*2);
-                    }
-                }
-                ctx.fill();
-                ctx.globalCompositeOperation = 'source-over';
-                return; 
-            }
-
             // -- Flow Field (Contour) Logic --
             if (mode === 'flow') {
                 const gridSize = maxCropDim / effectiveRings; 
@@ -975,8 +886,8 @@ export default function App() {
             }
 
             // -- Standard Modes Loop (Spiral, Lines, Dots, Photo) --
-            // Only run this if NOT stipple AND NOT flow
-            if (mode !== 'stipple' && mode !== 'flow') {
+            // Only run this if NOT flow
+            if (mode !== 'flow') {
                 for (let y = 0; y < h; y++) {
                     for (let x = 0; x < w; x++) {
                         const index = (y * w + x) * 4;
@@ -1592,38 +1503,6 @@ export default function App() {
                             layerPaths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${strokeW.toFixed(2)}" stroke-linecap="round" />`);
                         }
                     }
-                } else if (mode === 'stipple') {
-                    // ... existing stipple logic ...
-                    const totalPoints = effectiveRings * 800;
-                    const baseScale = maxCropDim / 1000; 
-                    
-                    // ENFORCED MIN THICKNESS FOR SVG
-                    let dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
-                    if (is3DMode && (dotRadius * 2) < minFeaturePx) dotRadius = minFeaturePx / 2;
-                    
-                    for (let i = 0; i < totalPoints; i++) {
-                        const seedOffset = layer.key === 'mono' ? 0 : layer.key.charCodeAt(0) * 1000;
-                        const r1 = seededRandom(i + seedOffset);
-                        const r2 = seededRandom(i + 1000000 + seedOffset);
-                        
-                        let px, py;
-                        if (frameShape === 'circle') {
-                            px = centerX - maxCropDim/2 + r1 * maxCropDim;
-                            py = centerY - maxCropDim/2 + r2 * maxCropDim;
-                        } else {
-                            px = (centerX - cropW/2) + r1 * cropW;
-                            py = (centerY - cropH/2) + r2 * cropH;
-                        }
-                        
-                        const val = getSourceVal(px, py); // 0 (dark) to 1 (light)
-                        if (val === 1) continue;
-                        
-                        const r3 = seededRandom(i + 2000000);
-                        if (r3 > val) { // Keep dot
-                            layerPaths.push(`<circle cx="${px.toFixed(2)}" cy="${py.toFixed(2)}" r="${dotRadius.toFixed(2)}" />`);
-                        }
-                    }
-
                 } else if (mode === 'dots') {
                     // ... existing dots logic ...
                     const gridSize = maxCropDim / effectiveRings; 
@@ -1809,7 +1688,6 @@ export default function App() {
                     <ModeButton active={mode === 'spiral'} onClick={() => handleModeChange('spiral')} icon={Disc} label="Spiral" />
                     <ModeButton active={mode === 'lines'} onClick={() => handleModeChange('lines')} icon={Layers} label="Lines" />
                     <ModeButton active={mode === 'dots'} onClick={() => handleModeChange('dots')} icon={Grid} label="Dots" />
-                    <ModeButton active={mode === 'stipple'} onClick={() => handleModeChange('stipple')} icon={Sparkles} label="Stipple" />
                     <ModeButton active={mode === 'flow'} onClick={() => handleModeChange('flow')} icon={Waves} label="Flow" />
                     <ModeButton active={mode === 'photo'} onClick={() => handleModeChange('photo')} icon={PhotoIcon} label="Photo" />
                 </div>
@@ -1846,13 +1724,12 @@ export default function App() {
                             highlight 
                             label={currentLabels.density} 
                             value={rings} 
-                            // INCREASED RANGE: Up to 500 for Stipple (400k points), 200 for others
-                            min={10} max={mode === 'stipple' ? 500 : 200} step={1} 
+                            min={10} max={200} step={1} 
                             onChange={(v) => updateSetting('rings', v)} 
                             icon={Circle}
                             tooltip={currentLabels.densityTooltip} 
                             onReset={handleSliderReset}
-                            resetValue={mode === 'stipple' ? 150 : DEFAULT_PATTERN_SETTINGS.rings}
+                            resetValue={DEFAULT_PATTERN_SETTINGS.rings}
                             settingKey="rings"
                         />
                         <Slider 
@@ -1869,7 +1746,7 @@ export default function App() {
                         />
                         </>
                     )}
-                    {mode !== 'stipple' && mode !== 'flow' && mode !== 'photo' && (
+                    {mode !== 'flow' && mode !== 'photo' && (
                         <Slider 
                             label="Rotation" 
                             value={rotation} 
