@@ -15,6 +15,10 @@ const DEFAULT_PATTERN_SETTINGS = {
     dotShape: 'circle'
 };
 const DEFAULT_MIN_THICKNESS = 0.32;
+// Define fixed heights for UI elements on mobile (in pixels for calculations)
+const MOBILE_HEADER_HEIGHT = 48; // h-12
+const MOBILE_NAV_HEIGHT = 56;    // h-14 (edit mode) or h-16 (crop mode)
+const MOBILE_DRAWER_HEIGHT = '40vh'; // max-h-[40vh]
 
 // --- Components ---
 
@@ -1320,9 +1324,21 @@ export default function IFStudio() {
       </div>
   );
     
-  // Dynamic padding calculation for the canvas area on mobile
+  // Dynamic height calculation for the canvas area on mobile
   const isMobileDrawerOpen = window.innerWidth < 768 && (activeTab || activeCropTab);
-  const mobileCanvasPadding = isMobileDrawerOpen ? 'pb-64' : 'pb-16'; // pb-64 (256px) is a safe push-up for max-h-[40vh] + nav bar
+    
+  // Calculate the required negative margin/padding for the canvas content to respect the mobile header and footer areas.
+  const canvasStyle = window.innerWidth < 768 ? {
+      // Top space: Mobile Header (48px)
+      // Bottom space: Fixed Nav (56px/64px) + Drawer (max 40vh) if open
+      
+      // We set the top padding of the flex container to the header height (pt-12 = 48px)
+      // We set the bottom padding of the flex container dynamically.
+      paddingBottom: isMobileDrawerOpen ? `calc(${MOBILE_DRAWER_HEIGHT} + ${MOBILE_NAV_HEIGHT + 20}px)` : `${MOBILE_NAV_HEIGHT}px`,
+      minHeight: '100%',
+      // The canvas itself will take up the remaining space dynamically
+  } : {};
+
 
   return (
     <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }}>
@@ -1330,7 +1346,7 @@ export default function IFStudio() {
       <StatusToast toast={toast} onClose={() => setToast({ message: null, type: 'info' })} />
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
 
-      {/* MOBILE HEADER - ALWAYS VISIBLE */}
+      {/* MOBILE HEADER - ALWAYS VISIBLE (Fixed Top) */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40">
            <div className="flex items-center gap-2 font-bold text-gray-800 text-sm"><Activity className="text-[#3B82F6]" size={16}/> IF Studio</div>
            {/* UTILITY ICONS - ALWAYS VISIBLE */}
@@ -1396,10 +1412,11 @@ export default function IFStudio() {
         )}
       </div>
 
-      {/* CANVAS AREA - Dynamic Padding added here to prevent overlap */}
+      {/* CANVAS AREA - Dynamic Padding applied here to prevent overlap */}
       <div 
-        className={`flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0 ${isMobileDrawerOpen ? mobileCanvasPadding : 'pb-16 md:pb-0'}`}
+        className={`flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0`}
         ref={containerRef}
+        style={canvasStyle}
       >
         {/* Main Content */}
         <div 
