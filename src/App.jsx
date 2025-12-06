@@ -362,9 +362,9 @@ export default function IFStudio() {
 
   // Function to handle sharing (for desktop button)
   const handleShare = () => {
-    // Description added to navigator.share payload
+    // FIX: Simplified title property for native sharing.
     const shareData = {
-        title: 'IF Studio: Precision Vector Art Engine for Makers & Fabricationr',
+        title: 'IF Studio: Vector Art Generator', 
         text: 'Convert your photos into vector art, spiral, halftone, and dot patterns for fabrication and design—free and in your browser!',
         url: window.location.href,
     };
@@ -843,6 +843,20 @@ export default function IFStudio() {
     }
     setIsProcessing(false);
   }, [mode, modeSettings, scale, contrast, brightness, invert, fgColor, panX, panY, frameShape, centerHole, step, is3DMode, minThickness, isDragging, compareMode, liveCrop.scale, liveCrop.panX, liveCrop.panY, liveCrop.frameShape, cropAspectW, cropAspectH]); // Added cropAspectW/H
+
+  // SUGGESTION 1: Add Canvas Resize Listener for Stability
+  useEffect(() => {
+    // This handler will be called when the window size changes
+    const handleResize = () => {
+        // We call processImage which correctly reads the current image and canvas ref
+        // dimensions and redraws the content within the new boundaries.
+        processImage();
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Cleanup the event listener when the component unmounts
+    return () => window.removeEventListener('resize', handleResize);
+  }, [processImage]);
 
   useEffect(() => {
     if (!imageSrc) return;
