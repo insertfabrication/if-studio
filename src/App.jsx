@@ -346,25 +346,6 @@ export default function IFStudio() {
   const helperCanvasRef = useRef(null);
 
   // --- Actions ---
-  
-  // FIX: Custom Viewport Height Logic for Mobile (Addressing 100vh issue)
-  useEffect(() => {
-    // Function to calculate and set the viewport height variable
-    const setVh = () => {
-      // We calculate 1% of the viewport height
-      const vh = window.innerHeight * 0.01; 
-      // And set it as a CSS variable for global use
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-    };
-
-    setVh(); // Set on initial mount
-    window.addEventListener('resize', setVh); // Set on resize (e.g., orientation change or browser UI change)
-
-    // Clean up the event listener
-    return () => window.removeEventListener('resize', setVh);
-  }, []);
-  // END FIX
-
   useEffect(() => {
       if (window.innerWidth < 768) {
           setSidebarOpen(false);
@@ -660,6 +641,7 @@ export default function IFStudio() {
         const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
         const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
         
+
         const fgR = fg.r, fgG = fg.g, fgB = fg.b;
         const pxPerMm = w / 200; // Default 200mm width if input hidden
         const minFeaturePx = is3DMode ? (minThickness * pxPerMm) : 0;
@@ -1253,7 +1235,7 @@ export default function IFStudio() {
       }
   }
     
-  // --- UI RENDER (Crop Input Section) ---
+  // --- UI RENDER (Crop Input Section - Desktop/Sidebar) ---
   const renderCropControls = () => (
       <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
           <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
@@ -1308,12 +1290,62 @@ export default function IFStudio() {
       </div>
   );
 
+  // --- UI RENDER (Mobile Crop Controls Inner Content) ---
+  const renderMobileCropControls = () => (
+      <div className="space-y-4">
+          <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-center flex items-center justify-center gap-2">
+              <Crop size={18} className="text-[#3B82F6]" />
+              <h3 className="font-bold text-sm text-gray-800">Adjust Crop & Position</h3>
+          </div>
+          
+          {/* Frame Shape */}
+          <section className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div className="text-[10px] uppercase font-bold text-gray-400 mb-2 tracking-wider">Frame Shape</div>
+              <div className="flex gap-2">
+                  <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'circle'}))} className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${liveCrop.frameShape === 'circle' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Circle size={20} className="mb-1"/><span className="text-[10px] font-bold">Circle</span></button>
+                  <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'square'}))} className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${liveCrop.frameShape === 'square' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Square size={20} className="mb-1"/><span className="text-[10px] font-bold">Square</span></button>
+                  <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'custom'}))} className={`flex-1 flex flex-col items-center justify-center p-2 rounded-lg border transition-all ${liveCrop.frameShape === 'custom' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><LayoutTemplate size={20} className="mb-1"/><span className="text-[10px] font-bold">Custom</span></button>
+              </div>
+
+              {liveCrop.frameShape === 'custom' && (
+                  <div className="mt-3 p-2 bg-gray-50 rounded-lg border border-gray-200 animate-in fade-in space-y-2">
+                      <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Aspect Ratio (W:H)</span>
+                      <div className="flex gap-2">
+                          <input
+                              type="number"
+                              value={cropAspectW}
+                              onChange={(e) => setCropAspectW(Math.max(1, parseInt(e.target.value) || 1))}
+                              min="1"
+                              className="w-1/2 p-2 text-xs text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
+                              aria-label="Custom Aspect Ratio Width"
+                          />
+                          <input
+                              type="number"
+                              value={cropAspectH}
+                              onChange={(e) => setCropAspectH(Math.max(1, parseInt(e.target.value) || 1))}
+                              min="1"
+                              className="w-1/2 p-2 text-xs text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
+                              aria-label="Custom Aspect Ratio Height"
+                          />
+                      </div>
+                  </div>
+              )}
+          </section>
+
+          {/* Position Sliders (Zoom, Pan X, Pan Y) */}
+          <section className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Position</div>
+              <div className="space-y-4">
+                  <Slider label="Zoom" value={liveCrop.scale} min={0.5} max={3.0} step={0.1} onChange={(v) => setLiveCrop(prev => ({...prev, scale: v}))} icon={Maximize} />
+                  <Slider label="Pan X" value={liveCrop.panX} min={0} max={100} step={1} onChange={(v) => setLiveCrop(prev => ({...prev, panX: v}))} icon={Move} />
+                  <Slider label="Pan Y" value={liveCrop.panY} min={0} max={100} step={1} onChange={(v) => setLiveCrop(prev => ({...prev, panY: v}))} icon={Move} />
+              </div>
+          </section>
+      </div>
+  );
+
   return (
-    // FIX: Replaced h-screen with custom height calculation using --vh 
-    <div 
-        className="flex w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" 
-        style={{ height: 'calc(var(--vh, 1vh) * 100)', touchAction: 'none' }}
-    >
+    <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }}>
 
       <StatusToast toast={toast} onClose={() => setToast({ message: null, type: 'info' })} />
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
@@ -1322,17 +1354,21 @@ export default function IFStudio() {
       <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40">
            <div className="flex items-center gap-2 font-bold text-gray-800 text-sm"><Activity className="text-[#3B82F6]" size={16}/> IF Studio</div>
            <div className="flex items-center gap-2">
-                {step === 'edit' && (
-                    <>
-                        <button onClick={handleShare} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg" title="Share App">
-                            <Share2 size={18}/>
-                        </button>
-                        <label className="p-1.5 bg-gray-50 text-gray-600 rounded-lg cursor-pointer" title="Upload New Image">
-                            <Plus size={18}/>
-                            <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                        </label>
-                    </>
+                {/* Share button - always visible */}
+                <button onClick={handleShare} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg" title="Share App">
+                    <Share2 size={18}/>
+                </button>
+                {/* Upload is visible when not in the dedicated crop mode */}
+                {step !== 'crop' && (
+                    <label className="p-1.5 bg-gray-50 text-gray-600 rounded-lg cursor-pointer" title="Upload New Image">
+                        <Plus size={18}/>
+                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                    </label>
                 )}
+                {/* Help button is always visible */}
+                <button onClick={() => setShowAbout(true)} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg" title="About / Help">
+                    <HelpCircle size={18}/>
+                </button>
            </div>
       </div>
 
@@ -1414,47 +1450,6 @@ export default function IFStudio() {
                     className="w-full h-full object-contain" 
                 />
                 
-                {/* Mobile Crop UI - STICKY BOTTOM */}
-                {step === 'crop' && (
-                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white p-4 rounded-t-2xl shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border-t border-gray-100 animate-in slide-in-from-bottom-full duration-300 z-50 pb-safe">
-                          <div className="flex justify-between items-center mb-4">
-                              <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Crop Shape</span>
-                              <div className="flex gap-2">
-                                  <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'circle'}))} className={`p-2.5 rounded-xl border ${liveCrop.frameShape === 'circle' ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-gray-50 border-gray-200'}`}><Circle size={20}/></button>
-                                  <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'square'}))} className={`p-2.5 rounded-xl border ${liveCrop.frameShape === 'square' ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-gray-50 border-gray-200'}`}><Square size={20}/></button>
-                                  <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'custom'}))} className={`p-2.5 rounded-xl border ${liveCrop.frameShape === 'custom' ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-gray-50 border-gray-200'}`}><LayoutTemplate size={20}/></button>
-                              </div>
-                          </div>
-                          {liveCrop.frameShape === 'custom' && (
-                              <div className="mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200 animate-in fade-in space-y-3">
-                                  <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Aspect Ratio (W:H)</span>
-                                  <div className="flex gap-2">
-                                      <input
-                                          type="number"
-                                          value={cropAspectW}
-                                          onChange={(e) => setCropAspectW(Math.max(1, parseInt(e.target.value) || 1))}
-                                          min="1"
-                                          className="w-1/2 p-2 text-sm text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
-                                          aria-label="Custom Aspect Ratio Width"
-                                      />
-                                      <input
-                                          type="number"
-                                          value={cropAspectH}
-                                          onChange={(e) => setCropAspectH(Math.max(1, parseInt(e.target.value) || 1))}
-                                          min="1"
-                                          className="w-1/2 p-2 text-sm text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
-                                          aria-label="Custom Aspect Ratio Height"
-                                      />
-                                  </div>
-                              </div>
-                          )}
-                          <div className="space-y-4 mb-5">
-                              <Slider label="Zoom" value={liveCrop.scale} min={0.5} max={3.0} step={0.1} onChange={(v) => setLiveCrop(prev => ({...prev, scale: v}))} />
-                          </div>
-                          <button onClick={applyCropAndGoToEdit} className="w-full py-3.5 bg-[#3B82F6] text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">Apply & Edit</button>
-                     </div>
-                )}
-
                 {/* Loading Spinner */}
                 {isProcessing && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/90 text-blue-600 px-6 py-3 rounded-full text-sm font-bold flex items-center shadow-xl animate-pulse border border-blue-100"><RefreshCw size={16} className="animate-spin mr-3" /> PROCESSING</div>}
                 
@@ -1482,28 +1477,83 @@ export default function IFStudio() {
             )}
         </div>
 
-        {/* Mobile Bottom Navigation (Edit Mode Only) */}
-        {step === 'edit' && (
-            <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
-                {activeTab && (
-                    // This section uses max-h-[45vh] which is okay as it is scrollable, 
-                    // but the main screen height fix ensures the entire app fits.
-                    <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[45vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
-                        <div className="flex justify-between items-center mb-3">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeTab} controls</span>
-                            <button onClick={() => setActiveTab(null)} className="p-1 text-gray-400 hover:text-gray-600"><X size={14}/></button>
-                        </div>
-                        {renderControls(activeTab)}
+        {/* Mobile Bottom Control Panel (Visible when not cropping) */}
+        <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
+            {/* CROP MODE PANEL (Replaces bottom bar) */}
+            {step === 'crop' && (
+                <div className="bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-full duration-300">
+                    {/* Scrollable controls section with 40vh limit */}
+                    <div className="px-4 pt-4 overflow-y-auto" style={{ maxHeight: '40vh' }}>
+                         {renderMobileCropControls()} 
                     </div>
-                )}
-                <div className="flex justify-around items-center h-14 bg-white">
-                    <button onClick={() => handleMobileTabClick('pattern')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'pattern' ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Layers size={20}/><span className="text-[9px] font-medium">Pattern</span></button>
-                    <button onClick={() => handleMobileTabClick('tune')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'tune' ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Move size={20}/><span className="text-[9px] font-medium">Tune</span></button>
-                    <button onClick={() => handleMobileTabClick('color')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'color' ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Palette size={20}/><span className="text-[9px] font-medium">Color</span></button>
-                    <button onClick={() => handleMobileTabClick('download')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'download' ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Download size={20}/><span className="text-[9px] font-medium">Download</span></button>
+                    {/* Fixed Apply button */}
+                    <div className="p-4 border-t border-gray-100">
+                        <button onClick={applyCropAndGoToEdit} className="w-full py-3.5 bg-[#3B82F6] text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">Apply & Edit</button>
+                    </div>
                 </div>
-            </div>
-        )}
+            )}
+
+            {/* EDIT MODE TABS AND CONTROLS */}
+            {step === 'edit' && (
+                <>
+                    {/* Control content/functionality rendering (constrained to 40vh) */}
+                    {activeTab && (
+                        <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[40vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeTab} controls</span>
+                                <button onClick={() => setActiveTab(null)} className="p-1 text-gray-400 hover:text-gray-600"><X size={14}/></button>
+                            </div>
+                            {renderControls(activeTab)}
+                        </div>
+                    )}
+                    {/* Navigation buttons - always visible when in edit mode */}
+                    <div className="flex justify-around items-center h-14 bg-white">
+                        {['pattern', 'tune', 'color', 'download'].map(tab => {
+                            const Icon = { pattern: Layers, tune: Move, color: Palette, download: Download }[tab];
+                            const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+                            
+                            return (
+                                <button 
+                                    key={tab}
+                                    onClick={() => handleMobileTabClick(tab)}
+                                    className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${
+                                        activeTab === tab 
+                                            ? 'text-[#3B82F6]'
+                                            : 'text-gray-400 hover:text-[#3B82F6]'
+                                    }`}
+                                >
+                                    <Icon size={20}/>
+                                    <span className="text-[9px] font-medium">{label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </>
+            )}
+
+             {/* UPLOAD/BLANK SCREEN BOTTOM BAR (Shows disabled icons but is clickable) */}
+             {step === 'upload' && (
+                 <div className="flex justify-around items-center h-14 bg-white border-t border-gray-100">
+                    {['pattern', 'tune', 'color', 'download'].map(tab => {
+                        const Icon = { pattern: Layers, tune: Move, color: Palette, download: Download }[tab];
+                        const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+                        
+                        return (
+                            <button 
+                                key={tab}
+                                onClick={() => showToast("Upload an image first to access controls.", 'info')}
+                                disabled={true}
+                                className="flex flex-col items-center gap-0.5 p-1 w-14 transition-colors text-gray-300 cursor-not-allowed"
+                            >
+                                <Icon size={20}/>
+                                <span className="text-[9px] font-medium">{label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+             )}
+        </div>
+        
       </div>
       
       {/* SEO Footer */}
@@ -1514,3 +1564,4 @@ export default function IFStudio() {
     </div>
   );
 }
+
