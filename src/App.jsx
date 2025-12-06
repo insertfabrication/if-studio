@@ -195,8 +195,8 @@ const AboutModal = ({ isOpen, onClose }) => {
                     <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-200">
                         <Activity className="text-white" size={20}/>
                     </div>
-                    <h2 className="text-xl md:text-2xl font-bold text-gray-900">IF Studio <span className="text-gray-400 text-base md:text-lg font-normal block md:inline">(Insert Fabrication)</span></h2>
-                    <p className="text-xs md:text-sm text-gray-500 max-w-xs mx-auto">A simple creative tool turning ordinary images into bold, stylized artwork.</p>
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-900">IF Studio - Precision Vector Art Engine for Makers & Fabrication <span className="text-gray-400 text-base md:text-lg font-normal block md:inline">(Insert Fabrication)</span></h2>
+                    <p className="text-xs md:text-sm text-gray-500 max-w-xs mx-auto">Precision Vector Art Engine for Makers & Fabrication</p>
                 </div>
 
                 <div className="space-y-3 text-xs md:text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
@@ -362,11 +362,15 @@ export default function IFStudio() {
 
   // Function to handle sharing (for desktop button)
   const handleShare = () => {
+    // Description added to navigator.share payload
+    const shareData = {
+        title: 'IF Studio: Precision Vector Art Engine for Makers & Fabricationr',
+        text: 'Convert your photos into vector art, spiral, halftone, and dot patterns for fabrication and design—free and in your browser!',
+        url: window.location.href,
+    };
+
     if (navigator.share) {
-        navigator.share({
-            title: 'IF Studio: Vector Art Generator',
-            url: window.location.href,
-        }).catch((error) => console.log('Error sharing', error));
+        navigator.share(shareData).catch((error) => console.log('Error sharing', error));
     } else {
         // Fallback for desktop browsers
         const tempInput = document.createElement('input');
@@ -1312,7 +1316,7 @@ export default function IFStudio() {
           ) : (
               <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                   <div className="flex items-center justify-between p-1">
-                      <div className="text-xs font-bold text-emerald-600 flex items-center gap-2"><Check size={12} className='text-emerald-500' /> Crop Applied</div>
+                      <div className="text-xs font-bold text-emerald-600 flex items-center gap-2"><Check size={12} className='text-emerald-500' /> Crop</div>
                       <button onClick={handleDoubleClick} className="text-xs text-gray-400 hover:text-blue-600 underline">Edit Crop</button>
                   </div>
                   {renderControls('pattern')}
@@ -1345,12 +1349,12 @@ export default function IFStudio() {
 
       {/* CANVAS AREA */}
       <div 
-        className="flex-1 relative flex flex-col h-full overflow-hidden md:pl-96 pt-12 md:pt-0"
+        className="flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0"
         ref={containerRef}
       >
         {/* Main Content */}
         <div 
-            className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-4 md:p-8" /* Padded Container */
+            className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-4 md:p-8 min-h-0" /* Added min-h-0 */
             onMouseDown={handleStart} onMouseMove={handleMove} onMouseUp={handleEnd} onMouseLeave={handleEnd}
             onTouchStart={handleTouchStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
             onDoubleClick={handleDoubleClick}
@@ -1466,7 +1470,7 @@ export default function IFStudio() {
       {/* SEO Footer */}
       <footer className="sr-only">
         <h2>IF Studio: Vector Art Generator | Halftone, Spiral & Dot Patterns</h2>
-        <p>Convert photos to custom vector art (SVG, PNG) for laser cutters, vinyl cutters, and 3D printing. Generate precise halftone, spiral, and stipple dot patterns, free and browser-based. Excellent tool for CNC art software and digital fabrication projects.</p>
+        <p>Convert photos to custom vector art (SVG, PNG) for laser cutters, vinyl cutters, and 3D printing. Generate precise halftone, spiral, and stipple dot patterns, free and in your browser. Excellent tool for CNC art software and digital fabrication projects.</p>
       </footer>
     </div>
   );
