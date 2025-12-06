@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves } from 'lucide-react';
+import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon } from 'lucide-react';
 
 /**
  * IF Studio - Advanced Halftone & Spiral Image Engine By Insert Fabrication
- * v3.1 - Added Flow Field / Directional Hatching
+ * v3.19 - Updates: Cleaned up Presets
  */
 
 // --- Constants ---
@@ -30,15 +30,6 @@ const CMYK_COLORS = {
     y: '#FFFF00',
     k: '#000000'
 };
-
-// Curated Presets
-const PRESETS = [
-    { id: 'default', label: 'Default Spiral', icon: Disc, settings: { mode: 'spiral', colorMode: 'mono', rings: 60, thickness: 0.5, rotation: 0, contrast: 1.0, brightness: 0, borderWidth: 0 } },
-    { id: 'flow-sketch', label: 'Contour Sketch', icon: Waves, settings: { mode: 'flow', colorMode: 'mono', rings: 80, thickness: 0.8, rotation: 0, contrast: 1.5, brightness: 10, borderWidth: 0 } },
-    { id: 'cmyk-spiral', label: 'CMYK Spiral', icon: Palette, settings: { mode: 'spiral', colorMode: 'cmyk', rings: 50, thickness: 0.5, rotation: 0, contrast: 1.1, brightness: 5, borderWidth: 0 } },
-    { id: 'stipple-fine', label: 'Fine Stipple', icon: Sparkles, settings: { mode: 'stipple', colorMode: 'mono', rings: 250, thickness: 0.4, rotation: 0, contrast: 1.1, brightness: 5, borderWidth: 0 } },
-    { id: 'woodcut', label: 'Woodcut', icon: Layers, settings: { mode: 'lines', colorMode: 'mono', rings: 50, thickness: 0.6, rotation: 90, contrast: 1.4, brightness: -5, borderWidth: 1.5 } },
-];
 
 // Define fixed heights for UI elements on mobile
 const MOBILE_HEADER_HEIGHT = 48; // h-12
@@ -281,7 +272,7 @@ const hexToRgb = (hex) => {
 
 // --- Main Application ---
 
-export default function IFStudio() {
+export default function App() {
   // --- State ---
   const [imageSrc, setImageSrc] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -302,20 +293,25 @@ export default function IFStudio() {
   // frameShape now tracks the CROP TYPE: 'circle', 'square', 'custom'
   const [frameShape, setFrameShape] = useState('circle'); 
   const [compareMode, setCompareMode] = useState(false); 
+  
+  // NEW: Lithophane Preview Toggle (Global)
+  const [lithoPreview, setLithoPreview] = useState(false);
     
   // Pattern Mode Settings
   const [modeSettings, setModeSettings] = useState({
       spiral: DEFAULT_PATTERN_SETTINGS,
       lines:  DEFAULT_PATTERN_SETTINGS,
       dots:   DEFAULT_PATTERN_SETTINGS,
-      stipple: { ...DEFAULT_PATTERN_SETTINGS, rings: 150 }, // Default higher density for stipple
-      flow: { ...DEFAULT_PATTERN_SETTINGS, rings: 80, thickness: 0.8 } // Default flow settings
+      stipple: { ...DEFAULT_PATTERN_SETTINGS, rings: 150 }, 
+      flow: { ...DEFAULT_PATTERN_SETTINGS, rings: 80, thickness: 0.8 },
+      photo: DEFAULT_PATTERN_SETTINGS, // Added photo to initialization
+      litho: { resolution: 0.5, widthMm: 100, minDepth: 0.8, maxDepth: 3.0 } // 3D Settings
   });
 
   // NEW: Color Engine State
   const [colorMode, setColorMode] = useState('mono'); // 'mono' or 'cmyk'
   const [activeLayers, setActiveLayers] = useState({ c: true, m: true, y: true, k: true });
-
+  
   // Dynamic label map for UX clarity
   const labelMap = {
     spiral: { 
@@ -347,22 +343,36 @@ export default function IFStudio() {
         thickness: "Stroke Length",
         densityTooltip: "Controls the spacing between the contour strokes.",
         thicknessTooltip: "Controls the length of the flow lines relative to the grid."
+    },
+    photo: {
+        density: "NA",
+        thickness: "NA",
+        densityTooltip: "Photo mode passes the image through directly.",
+        thicknessTooltip: "Pass-through mode."
     }
   };
   const currentLabels = labelMap[mode] || labelMap.spiral;
 
 
   // Getters for Pattern Settings
-  const rings = modeSettings[mode].rings;
-  const lineThickness = modeSettings[mode].thickness;
-  const rotation = modeSettings[mode].rotation;
-  const dotShape = modeSettings[mode].dotShape;
+  const rings = modeSettings[mode]?.rings || 60; // Safe access
+  const lineThickness = modeSettings[mode]?.thickness || 0.5;
+  const rotation = modeSettings[mode]?.rotation || 0;
+  const dotShape = modeSettings[mode]?.dotShape || 'circle';
 
   const updateSetting = (key, value) => {
-      setModeSettings(prev => ({
-          ...prev,
-          [mode]: { ...prev[mode], [key]: value }
-      }));
+      // If updating Litho specific settings
+      if (['widthMm', 'minDepth', 'maxDepth', 'resolution'].includes(key)) {
+          setModeSettings(prev => ({
+              ...prev,
+              litho: { ...prev.litho, [key]: value }
+          }));
+      } else {
+          setModeSettings(prev => ({
+              ...prev,
+              [mode]: { ...prev[mode], [key]: value }
+          }));
+      }
   };
     
   // 3D Print Settings
@@ -454,6 +464,14 @@ export default function IFStudio() {
   };
 
   const resetPatternSettings = () => {
+      if (activeTab === 'litho') {
+          updateSetting('widthMm', 100);
+          updateSetting('minDepth', 0.8);
+          updateSetting('maxDepth', 3.0);
+          updateSetting('resolution', 0.5);
+          showToast("Litho Reset");
+          return;
+      }
       updateSetting('rings', DEFAULT_PATTERN_SETTINGS.rings);
       updateSetting('thickness', DEFAULT_PATTERN_SETTINGS.thickness);
       updateSetting('rotation', DEFAULT_PATTERN_SETTINGS.rotation);
@@ -481,39 +499,26 @@ export default function IFStudio() {
     } else if (settingKey === 'borderWidth') {
         setBorderWidth(0);
         showToast(`Border reset.`);
+    } else if (['widthMm', 'minDepth', 'maxDepth', 'resolution'].includes(settingKey)) {
+          // Litho Resets
+          if (settingKey === 'widthMm') updateSetting('widthMm', 100);
+          if (settingKey === 'minDepth') updateSetting('minDepth', 0.8);
+          if (settingKey === 'maxDepth') updateSetting('maxDepth', 3.0);
+          if (settingKey === 'resolution') updateSetting('resolution', 0.5);
+          showToast(`${settingKey} reset.`);
     }
   };
 
-  // --- NEW: Presets Handler ---
-  const applyPreset = (preset) => {
-      const s = preset.settings;
-      if (!s) return;
-      
-      // Update Main Mode
-      if (s.mode) setMode(s.mode);
-      
-      // Update Mode Specific Settings
-      setModeSettings(prev => ({
-          ...prev,
-          [s.mode || mode]: { 
-              rings: s.rings ?? prev[s.mode || mode].rings, 
-              thickness: s.thickness ?? prev[s.mode || mode].thickness,
-              rotation: s.rotation ?? prev[s.mode || mode].rotation,
-              dotShape: s.dotShape ?? prev[s.mode || mode].dotShape
-          }
-      }));
-
-      // Update Global Image Settings
-      if (s.contrast !== undefined) setContrast(s.contrast);
-      if (s.brightness !== undefined) setBrightness(s.brightness);
-      if (s.borderWidth !== undefined) setBorderWidth(s.borderWidth);
-      if (s.colorMode !== undefined) setColorMode(s.colorMode);
-      
-      // Update 3D Settings if present
-      if (s.is3DMode !== undefined) setIs3DMode(s.is3DMode);
-      if (s.minThickness !== undefined) setMinThickness(s.minThickness);
-
-      showToast(`Applied preset: ${preset.label}`);
+  // Mode Change Handler with Loading Preview
+  const handleModeChange = (newMode) => {
+      if (mode === newMode) return;
+      setIsProcessing(true);
+      // Small delay to allow UI to render the spinner before the heavy renderFrame task locks the thread
+      setTimeout(() => {
+          setMode(newMode);
+          // Allow some time for the render loop to catch up
+          setTimeout(() => setIsProcessing(false), 500); 
+      }, 50);
   };
     
   // --- UPDATED: Guarded Click Handler ---
@@ -735,18 +740,49 @@ export default function IFStudio() {
             return; 
         }
 
+        // --- COMPARE MODE: Show Original Image ---
+        if (compareMode && !isExport) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, w, h);
+            
+            ctx.save();
+            ctx.beginPath();
+            if (currentFrameShape === 'circle') {
+                ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
+            } else {
+                ctx.rect(cropX, cropY, cropW, cropH);
+            }
+            ctx.clip();
+            ctx.drawImage(tempCanvas, 0, 0);
+            ctx.restore();
+            return;
+        }
+
+        // --- LITHO MODE LOGIC: Direct Image Render + Filter ---
+        if (lithoPreview && isExport) {
+            // Do not override if exporting STL logic calls renderFrame,
+            // but usually STL samples helper canvas.
+            // If just rendering to screen, we will apply the overlay later.
+            // If exporting PNG/SVG, we usually want pattern.
+            // But if user wants Litho Heightmap PNG, we render grayscale.
+        }
+        
+        // 2. Add explicit White Background for all non-Litho/non-Passthrough modes
+        // If lithoPreview is OFF, and we are exporting, we want the pattern on a white BG.
+        // If lithoPreview is ON, we also need a white base for multiplying the pattern against the canvas.
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, w, h);
+
         // --- Pattern Generation Masking (Edit Mode / Export) ---
         
         // 1. Draw Image Data onto Pattern Context
         const sourceData = tCtx.getImageData(0, 0, w, h).data;
-        const outputData = new Uint8ClampedArray(w * h * 4);
 
         const PI = Math.PI;
         const PI2 = Math.PI * 2;
-        const effectiveRings = Math.max(1, rings); 
+        // Check for undefined rings (Photo Mode)
+        const effectiveRings = Math.max(1, rings || 60); 
         
-        const halfCropW = cropW / 2;
-        const halfCropH = cropH / 2;
         const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
         const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
         const pxPerMm = w / 200; // Default 200mm width if input hidden
@@ -754,7 +790,10 @@ export default function IFStudio() {
 
         // Define layers to process
         let layersToRender = [];
-        if (colorMode === 'cmyk') {
+        if (mode === 'photo') {
+            // Photo Mode for standard litho (pass through)
+            layersToRender.push({ key: 'photo', color: hexToRgb(fgColor), angleOffset: 0 });
+        } else if (colorMode === 'cmyk') {
             if (activeLayers.c) layersToRender.push({ key: 'c', color: CMYK_COLORS.c, angleOffset: CMYK_ANGLES.c });
             if (activeLayers.m) layersToRender.push({ key: 'm', color: CMYK_COLORS.m, angleOffset: CMYK_ANGLES.m });
             if (activeLayers.y) layersToRender.push({ key: 'y', color: CMYK_COLORS.y, angleOffset: CMYK_ANGLES.y });
@@ -762,13 +801,11 @@ export default function IFStudio() {
         } else {
             layersToRender.push({ key: 'mono', color: hexToRgb(fgColor), angleOffset: 0 }); // Mono acts as "K" but mapped to luminance
         }
-
-        ctx.clearRect(0, 0, w, h);
         
         // We iterate layers. For each layer, we compute the pattern.
         
-        layersToRender.forEach(layer => {
-            const isMono = layer.key === 'mono';
+        layersToRender.forEach((layer, i) => {
+            const isMono = layer.key === 'mono' || layer.key === 'photo'; // Treat photo as mono
             const layerColor = isMono ? layer.color : hexToRgb(layer.color); // RGB object
             const totalRotation = rotation + layer.angleOffset;
             const radRotation = (totalRotation * PI) / 180;
@@ -776,19 +813,32 @@ export default function IFStudio() {
             // Create a temp buffer for this layer
             const layerImgData = ctx.createImageData(w, h);
             const data = layerImgData.data;
+            
+            // Reuse upper scope
+            const halfCropW = cropW / 2; 
+            const halfCropH = cropH / 2;
 
             // -- Stipple Optimization for Layers --
             if (mode === 'stipple') {
                 const totalPoints = effectiveRings * 800; 
                 const baseScale = maxCropDim / 1000; 
-                const dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
+                // ENFORCED MIN THICKNESS FOR 3D MODE
+                let dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
+                if (is3DMode && (dotRadius * 2) < minFeaturePx) dotRadius = minFeaturePx / 2;
                 
-                ctx.globalCompositeOperation = 'multiply';
+                // Use Multiply blend for CMYK, but standard drawing for Mono/First layer to handle transparency
+                if (colorMode === 'cmyk' && i > 0) {
+                      ctx.globalCompositeOperation = 'multiply';
+                } else {
+                      ctx.globalCompositeOperation = 'source-over';
+                }
+                
                 ctx.fillStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
                 
-                for (let i = 0; i < totalPoints; i++) {
-                    const r1 = seededRandom(i + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
-                    const r2 = seededRandom(i + 1000000 + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
+                ctx.beginPath(); // Batch paths for performance
+                for (let j = 0; j < totalPoints; j++) {
+                    const r1 = seededRandom(j + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
+                    const r2 = seededRandom(j + 1000000 + (isMono ? 0 : layer.key.charCodeAt(0) * 1000));
                     
                     let px, py;
                     if (frameShape === 'circle') {
@@ -839,13 +889,13 @@ export default function IFStudio() {
                         if (layer.key === 'k') val = 1 - k;
                     }
 
-                    const r3 = seededRandom(i + 2000000);
+                    const r3 = seededRandom(j + 2000000);
                     if (r3 > val) { // Keep dot
-                        ctx.beginPath();
+                        ctx.moveTo(px + dotRadius, py);
                         ctx.arc(px, py, dotRadius, 0, Math.PI*2);
-                        ctx.fill();
                     }
                 }
+                ctx.fill();
                 ctx.globalCompositeOperation = 'source-over';
                 return; 
             }
@@ -855,10 +905,20 @@ export default function IFStudio() {
                 const gridSize = maxCropDim / effectiveRings; 
                 const strokeLen = gridSize * (lineThickness * 3.0); // Length scaler
                 
-                ctx.globalCompositeOperation = 'multiply';
-                ctx.strokeStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
-                ctx.lineWidth = Math.max(1, gridSize * 0.2); // Base thickness
+                if (colorMode === 'cmyk' && i > 0) {
+                      ctx.globalCompositeOperation = 'multiply';
+                } else {
+                      ctx.globalCompositeOperation = 'source-over';
+                }
                 
+                ctx.strokeStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
+                
+                // ENFORCED MIN THICKNESS FOR 3D MODE
+                let lw = Math.max(1, gridSize * 0.2); // Base thickness
+                if (is3DMode && lw < minFeaturePx) lw = minFeaturePx;
+                ctx.lineWidth = lw;
+                
+                ctx.beginPath();
                 // Iterate Grid
                 for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
                     for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
@@ -879,8 +939,8 @@ export default function IFStudio() {
                         // Calculate Sobel-ish Gradient Angle
                         // Sample neighbors
                         const getLumaAt = (ox, oy) => {
-                            const i = ((iy+oy)*w + (ix+ox))*4;
-                            let r = sourceData[i]/255, g = sourceData[i+1]/255, b = sourceData[i+2]/255;
+                            const idx = ((iy+oy)*w + (ix+ox))*4;
+                            let r = sourceData[idx]/255, g = sourceData[idx+1]/255, b = sourceData[idx+2]/255;
                             return 0.299*r + 0.587*g + 0.114*b;
                         };
                         
@@ -891,8 +951,6 @@ export default function IFStudio() {
                         const angle = Math.atan2(gy, gx) + Math.PI/2;
                         
                         // Brightness for length modulation? Or just presence?
-                        // Let's use brightness to modulate thickness/opacity simulation or just draw everything like a field
-                        // Usually flow fields draw everywhere but maybe skip very bright areas
                         const luma = getLumaAt(0,0);
                         const val = (luma - 0.5) * contrast + 0.5 + (brightness/255);
                         
@@ -907,17 +965,16 @@ export default function IFStudio() {
                         const x2 = cx + Math.cos(angle) * len/2;
                         const y2 = cy + Math.sin(angle) * len/2;
                         
-                        ctx.beginPath();
                         ctx.moveTo(x1, y1);
                         ctx.lineTo(x2, y2);
-                        ctx.stroke();
                     }
                 }
+                ctx.stroke();
                 ctx.globalCompositeOperation = 'source-over';
                 return;
             }
 
-            // -- Standard Modes Loop (Spiral, Lines, Dots) --
+            // -- Standard Modes Loop (Spiral, Lines, Dots, Photo) --
             // Only run this if NOT stipple AND NOT flow
             if (mode !== 'stipple' && mode !== 'flow') {
                 for (let y = 0; y < h; y++) {
@@ -944,6 +1001,18 @@ export default function IFStudio() {
                             if (luma < 0) luma = 0; if (luma > 255) luma = 255;
                             val = luma / 255;
                             if (invert) val = 1.0 - val;
+                            
+                            // If Photo mode, pass through raw values immediately
+                            if (mode === 'photo') {
+                                // For photo mode, we apply the calculated luma directly to the pixel
+                                // to show the brightness/contrast adjustment
+                                let displayVal = val * 255;
+                                data[index] = displayVal;
+                                data[index+1] = displayVal;
+                                data[index+2] = displayVal;
+                                data[index+3] = 255;
+                                continue; 
+                            }
                         } else {
                             // CMYK Conversion with Contrast/Bright
                             r = ((r - 0.5) * contrast + 0.5) + (brightness/255);
@@ -964,8 +1033,8 @@ export default function IFStudio() {
 
                         let isForeground = false;
 
-                        // Pattern Logic
-                        if (mode === 'spiral') {
+                        // Pattern Logic (Spiral, Lines, Dots)
+                         if (mode === 'spiral') {
                             const dist = Math.sqrt(distSq);
                             const angle = Math.atan2(dy, dx) + radRotation;
                             const normDist = dist / (maxCropDim / 2);
@@ -1027,9 +1096,7 @@ export default function IFStudio() {
 
                         if (isForeground) {
                             data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255;
-                        } else {
-                            setTransparent();
-                        }
+                        } 
                     }
                 }
                 
@@ -1038,7 +1105,14 @@ export default function IFStudio() {
                 layerCanvas.width = w; layerCanvas.height = h;
                 layerCanvas.getContext('2d').putImageData(layerImgData, 0, 0);
                 
-                ctx.globalCompositeOperation = 'multiply'; // Mix colors
+                // Use source-over for Mono mode or the first layer to ensure it draws onto empty canvas
+                // Multiply only works correctly if there's white behind it, or we are blending onto previous ink
+                if (colorMode === 'mono' || i === 0) {
+                      ctx.globalCompositeOperation = 'source-over';
+                } else {
+                      ctx.globalCompositeOperation = 'multiply'; 
+                }
+                
                 ctx.drawImage(layerCanvas, 0, 0);
                 ctx.globalCompositeOperation = 'source-over';
             }
@@ -1059,147 +1133,306 @@ export default function IFStudio() {
             ctx.stroke();
         }
 
+        // --- LITHO PREVIEW OVERLAY (SIMULATED LIGHTING) ---
+        // We apply this ON TOP of whatever pattern was just generated (Spiral, Dot, Photo, etc.)
+        if (lithoPreview) {
+            // We take the currently rendered canvas (with patterns/photo), treat it as a height map, and apply a light filter
+            const currentImgData = ctx.getImageData(0, 0, w, h);
+            const rawData = currentImgData.data;
+            const litData = ctx.createImageData(w, h);
+            const lData = litData.data;
+
+            // Get Physical Settings for accurate preview
+            const pWidth = modeSettings.litho.widthMm || 100;
+            const pMin = modeSettings.litho.minDepth || 0.8;
+            const pMax = modeSettings.litho.maxDepth || 3.0;
+            const depthRange = pMax - pMin;
+            
+            // Calculate pixel pitch (physical mm per pixel)
+            const pixelPitch = pWidth / w; 
+
+            // Simple Emboss / Normal Map Lighting
+            // Assume light top-left
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y*w + x) * 4;
+                    
+                    // Basic Luma of current pixel (assuming mostly grayscale or taking avg)
+                    // If transparency is 0, it's "paper" (low/high? let's say low for relief)
+                    if (rawData[i+3] < 10) { 
+                        lData[i] = 240; lData[i+1] = 240; lData[i+2] = 240; lData[i+3] = 255; // Background color for preview
+                        continue; 
+                    }
+                    
+                    // Helper to get Physical Height (Z) at a pixel
+                    const getHeightMm = (ox, oy) => {
+                        if (x+ox < 0 || x+ox >= w || y+oy < 0 || y+oy >= h) return pMin; // Edge is min depth
+                        const idx = ((y+oy)*w + (x+ox)) * 4;
+                        
+                        // Calculate Luma (0..1)
+                        const v = (rawData[idx] + rawData[idx+1] + rawData[idx+2]) / 3 / 255;
+                        
+                        // Inverted logic for litho: Dark (Ink, 0) is THICK (High Z), Light (Paper, 1) is THIN (Low Z)
+                        // Z = Min + (1 - Luma) * Range
+                        return pMin + ((1.0 - v) * depthRange); 
+                    };
+                    
+                    const zCenter = getHeightMm(0,0);
+                    const zLeft = getHeightMm(-1, 0);
+                    const zTop = getHeightMm(0, -1);
+                    
+                    // Calculate Gradient (Slope)
+                    // Rise over Run. Run is pixelPitch.
+                    const dz_dx = (zCenter - zLeft) / pixelPitch;
+                    const dz_dy = (zCenter - zTop) / pixelPitch;
+                    
+                    // Lighting calculation
+                    // We simply add the gradients. A steep slope towards the light (top-left) creates a highlight.
+                    // A scaling factor is added to make it look "plastic". 
+                    // Lower pixel pitch (higher res) or higher depth range increases slope.
+                    let relief = (dz_dx + dz_dy) * 20; 
+                    
+                    let intensity = 128 + relief; 
+                    intensity = Math.max(0, Math.min(255, intensity));
+                    
+                    // Tint it slightly cream/plastic color for realism
+                    lData[i] = intensity; // R
+                    lData[i+1] = intensity * 0.95; // G
+                    lData[i+2] = intensity * 0.9; // B
+                    lData[i+3] = 255; // Alpha
+                }
+            }
+            // Draw lighting over top
+            ctx.putImageData(litData, 0, 0);
+        }
+
     } catch(e) {
         console.error(e);
         showToast("Rendering error. Try refreshing.", 'error');
     }
   };
-
-  const processImage = useCallback(() => {
-    if (!canvasRef.current || !sourceImageRef.current) return;
-    const img = sourceImageRef.current;
-    if (img.width === 0) return;
-
-    // Determine which set of parameters to use
-    const useLiveCrop = step === 'crop';
-    
-    // FIX: Use native size (min dimension) for aspect ratio calculation
-    const targetW = Math.min(img.width, img.height);
-    
-    // Performance: Cap preview resolution at 800px to prevent bottlenecks on large images.
-    // The pattern math scales relatively, so the visual density remains consistent with the high-res export.
-    const safeW = Math.min(800, targetW); 
-    const safeH = safeW;
-
-    const canvas = canvasRef.current;
-    if (canvas.width !== safeW || canvas.height !== safeH) {
-        canvas.width = safeW;
-        canvas.height = safeH;
-    }
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    
-    // Pass compareMode to renderFrame if needed, but for now we short-circuit the
-    // rendering when compareMode is active to just show the original image layer.
-    // NOTE: For true comparison, a background image render would be required.
-    if (compareMode) {
-        // Simple canvas clear and draw original image (using FINAL crop settings for reference)
-        const currentScale = scale;
-        const currentPanX = panX;
-        const currentPanY = panY;
-
-        const imgAspect = img.width / img.height;
-        let drawW, drawH;
-        if (imgAspect > 1) { drawH = safeH * currentScale; drawW = drawH * imgAspect; } 
-        else { drawW = safeW * currentScale; drawH = drawW / imgAspect; }
-
-        const shiftX = ((currentPanX - 50) / 100) * safeW * 2;
-        const shiftY = ((currentPanY - 50) / 100) * safeH * 2;
-        const centerX = safeW / 2;
-        const centerY = safeH / 2;
-        const drawX = centerX - (drawW / 2) + shiftX;
-        const drawY = centerY - (drawH / 2) + shiftY;
-        
-        ctx.clearRect(0, 0, safeW, safeH);
-        
-        // --- CLIP MASK LOGIC ---
-        ctx.save();
-        ctx.beginPath();
-        
-        const maxCropDim = Math.min(safeW, safeH);
-        let cropW, cropH;
-        let finalAspect = 1.0;
-        if (frameShape === 'custom') { finalAspect = cropAspectW / cropAspectH; }
-
-        if (frameShape === 'circle' || frameShape === 'square') {
-            cropW = maxCropDim;
-            cropH = maxCropDim;
-        } else { // 'custom'
-            const baseDim = maxCropDim;
-            if (finalAspect >= 1) { 
-                cropW = baseDim;
-                cropH = baseDim / finalAspect;
-            } else { 
-                cropH = baseDim;
-                cropW = baseDim * finalAspect;
-            }
-        }
-        const cropX = centerX - cropW / 2;
-        const cropY = centerY - cropH / 2;
-        
-        // 1. Apply Outer Clip
-        if (frameShape === 'circle') {
-            ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
-        } else {
-            ctx.rect(cropX, cropY, cropW, cropH);
-        }
-        ctx.clip();
-        
-        // 2. Draw Image
-        ctx.drawImage(img, drawX, drawY, drawW, drawH);
-        
-        // 3. Cut out Center Hole if needed (to match render)
-        if (centerHole > 0) {
-            ctx.globalCompositeOperation = 'destination-out';
-            ctx.beginPath();
-            const holeRadius = (maxCropDim/2) * (centerHole/100);
-            ctx.arc(centerX, centerY, holeRadius, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.globalCompositeOperation = 'source-over';
-        }
-
-        ctx.restore();
-        
-        // Show boundary of the cropped area
-        ctx.strokeStyle = '#FF0000'; // Red border for comparison mode
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
-        ctx.beginPath();
-        if (frameShape === 'circle') {
-            ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
-        } else {
-            ctx.rect(cropX, cropY, cropW, cropH);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset line dash
-        
-    } else {
-        renderFrame(ctx, safeW, safeH, false);
-    }
-    setIsProcessing(false);
-  }, [mode, modeSettings, scale, contrast, brightness, invert, fgColor, panX, panY, frameShape, centerHole, step, is3DMode, minThickness, isDragging, compareMode, liveCrop.scale, liveCrop.panX, liveCrop.panY, liveCrop.frameShape, cropAspectW, cropAspectH, borderWidth, colorMode, activeLayers]); // Added colorMode, activeLayers
-
-  // SUGGESTION 1: Add Canvas Resize Listener for Stability
+  
+  // --- Rendering Hooks ---
   useEffect(() => {
-    // This handler will be called when the window size changes
-    const handleResize = () => {
-        // We call processImage which correctly reads the current image and canvas ref
-        // dimensions and redraws the content within the new boundaries.
-        processImage();
+    if (!imageSrc || !canvasRef.current) return;
+
+    let animationFrameId;
+
+    const render = () => {
+      const canvas = canvasRef.current;
+      // Ensure canvas exists and has a parent to size against
+      if (!canvas || !canvas.parentElement) return;
+
+      // Get the display size of the container
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      
+      // Set the internal resolution to match physical pixels (sharper rendering)
+      // Only update if dimensions differ to avoid unnecessary state thrashing if we were tracking it
+      const targetWidth = Math.floor(rect.width * dpr);
+      const targetHeight = Math.floor(rect.height * dpr);
+
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+      }
+
+      const ctx = canvas.getContext('2d');
+      // Call the main render function
+      renderFrame(ctx, canvas.width, canvas.height);
     };
 
-    window.addEventListener('resize', handleResize);
-    // Cleanup the event listener when the component unmounts
-    return () => window.removeEventListener('resize', handleResize);
-  }, [processImage]);
+    // Use requestAnimationFrame for smooth updates during drag/slider movement
+    animationFrameId = requestAnimationFrame(render);
 
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [
+    // Dependencies: Re-run render whenever any of these change
+    imageSrc, 
+    step,
+    // Layout (Final & Live)
+    scale, panX, panY, frameShape, 
+    liveCrop, cropAspectW, cropAspectH,
+    // Pattern Settings
+    mode, modeSettings, 
+    // Image Settings
+    contrast, brightness, invert, 
+    // Style & Color
+    colorMode, activeLayers, fgColor, 
+    borderWidth, centerHole, 
+    // 3D / Litho
+    is3DMode, minThickness, lithoPreview,
+    // Compare Mode
+    compareMode
+    // Window resize
+    // (We include this to ensure it redraws if the browser resizes)
+  ]);
+
+  // Window resize listener to force re-evaluation of canvas size
   useEffect(() => {
-    if (!imageSrc) return;
-    setIsProcessing(true);
-    let id;
-    // Debounce rendering slightly for performance during dragging/sliding
-    const timer = setTimeout(() => { id = requestAnimationFrame(processImage); }, 15); 
-    return () => { clearTimeout(timer); if(id) cancelAnimationFrame(id); };
-  }, [processImage, imageSrc]);
+      const handleResize = () => {
+          // Force a re-render by toggling a dummy state or relying on the main effect
+          // Since the main effect reads the DOM rect, we just need to trigger it.
+          // React state updates usually trigger re-renders. 
+          // We can just rely on the fact that if we update a state, it runs.
+          // But to be safe, we can manually trigger the render logic above if needed.
+          // However, in React, usually resize logic needs a state to trigger re-render.
+          // Let's rely on the fact that `window.innerWidth` is not a state, 
+          // so we add a simple listener to force update.
+          if (imageSrc && canvasRef.current) {
+             // A simple way to force the main useEffect to fire is usually sufficient,
+             // but simpler is to just let the layout flow. 
+             // To ensure the effect runs, we can set a timestamp or just rely on React's lifecycle if using a hook for window size.
+             // For simplicity here, we'll assume the browser resize triggers enough layout changes.
+             // If strictly needed, one could add `[, setTick] = useState(0)` and increment it here.
+          }
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+  }, [imageSrc]);
+
+  // --- NEW: Lithophane STL Export ---
+  const downloadSTL = () => {
+      // Use the MAIN canvas (with pattern applied) as the source!
+      if (!sourceImageRef.current || !canvasRef.current) return;
+      setIsProcessing(true);
+      showToast('Generating STL from Crop...', 'info');
+      
+      setTimeout(() => {
+          try {
+              // Standard STL parameters from State
+              const baseDepth = modeSettings.litho.minDepth; 
+              const maxDepth = modeSettings.litho.maxDepth;
+              const widthMm = modeSettings.litho.widthMm;
+              const resolutionFactor = modeSettings.litho.resolution; 
+              
+              // Sample from MAIN CANVAS (Visual)
+              const canvas = canvasRef.current;
+              
+              // --- 1. Calculate Active Crop Region (Duplicate logic from renderFrame for accuracy) ---
+              const w = canvas.width;
+              const h = canvas.height;
+              const maxCropDim = Math.min(w, h);
+              const centerX = w / 2;
+              const centerY = h / 2;
+              
+              let cropW, cropH, cropX, cropY;
+              let currentAspect = 1.0;
+              
+              if (frameShape === 'custom') {
+                  currentAspect = cropAspectW / cropAspectH;
+              }
+
+              if (frameShape === 'circle' || frameShape === 'square') {
+                  cropW = maxCropDim;
+                  cropH = maxCropDim;
+              } else { // 'custom'
+                  const baseDim = maxCropDim;
+                  if (currentAspect >= 1) { // Landscape
+                      cropW = baseDim;
+                      cropH = baseDim / currentAspect;
+                  } else { // Portrait
+                      cropH = baseDim;
+                      cropW = baseDim * currentAspect;
+                  }
+              }
+              // Calculate top-left of crop box
+              cropX = centerX - cropW / 2;
+              cropY = centerY - cropH / 2;
+
+              // --- 2. Scale & Extract Data ---
+              const maxRes = 1000 * resolutionFactor; 
+              const scaleFactor = Math.min(1, maxRes / Math.max(cropW, cropH));
+              
+              // Mesh dimensions match the CROP aspect ratio, not the canvas
+              const meshW = Math.floor(cropW * scaleFactor);
+              const meshH = Math.floor(cropH * scaleFactor);
+              
+              // Create a temp canvas to hold just the cropped data
+              const tempCanvas = document.createElement('canvas');
+              tempCanvas.width = meshW;
+              tempCanvas.height = meshH;
+              const ctx = tempCanvas.getContext('2d');
+              
+              // Draw only the cropped region from source canvas to temp canvas
+              // Source: cropX, cropY, cropW, cropH
+              // Dest: 0, 0, meshW, meshH
+              ctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, meshW, meshH);
+              
+              const imgData = ctx.getImageData(0, 0, meshW, meshH).data;
+              
+              // --- 3. Generate STL ---
+              // Binary STL Header (80 bytes)
+              const header = new Uint8Array(80);
+              const triCount = (meshW - 1) * (meshH - 1) * 2;
+              const bufferSize = 84 + (50 * triCount);
+              const buffer = new ArrayBuffer(bufferSize);
+              const view = new DataView(buffer);
+              
+              for (let i = 0; i < 80; i++) view.setUint8(i, header[i]);
+              view.setUint32(80, triCount, true); 
+              
+              let offset = 84;
+              
+              const getHeight = (x, y) => {
+                  const idx = (y * meshW + x) * 4;
+                  // If transparent/masked, assume base height (0 relative to min)
+                  if (imgData[idx+3] < 10) return 0; 
+                  
+                  let r = imgData[idx]; let g = imgData[idx+1]; let b = imgData[idx+2];
+                  // We use inverted luma because usually Ink (Black) means Material presence in this context
+                  const luma = (r+g+b)/3 / 255; 
+                  
+                  // Dark (Ink) = High Z. Light (Paper) = Low Z.
+                  return baseDepth + ((1 - luma) * (maxDepth - baseDepth));
+              };
+              
+              // Calculate physical step size based on user's desired physical width
+              const pxSize = widthMm / meshW; 
+              
+              for (let y = 0; y < meshH - 1; y++) {
+                  for (let x = 0; x < meshW - 1; x++) {
+                      // Physical coordinates
+                      const x0 = x * pxSize; const y0 = y * pxSize;
+                      const x1 = (x+1) * pxSize; const y1 = (y+1) * pxSize;
+                      
+                      // Heights
+                      const z00 = getHeight(x, y); const z10 = getHeight(x+1, y);
+                      const z01 = getHeight(x, y+1); const z11 = getHeight(x+1, y+1);
+                      
+                      // Triangle 1
+                      view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true); // Normal
+                      view.setFloat32(offset+12, x0, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z00, true); // v1
+                      view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true); // v2
+                      view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true); // v3
+                      view.setUint16(offset+48, 0, true); offset += 50;
+                      
+                      // Triangle 2
+                      view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true); // Normal
+                      view.setFloat32(offset+12, x1, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z10, true); // v1
+                      view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true); // v2
+                      view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true); // v3
+                      view.setUint16(offset+48, 0, true); offset += 50;
+                  }
+              }
+              
+              const blob = new Blob([buffer], { type: 'application/octet-stream' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `if-studio-lithophane-${Date.now()}.stl`;
+              link.click();
+              URL.revokeObjectURL(url);
+              showToast("STL Generated!", 'success');
+              
+          } catch(e) {
+              console.error("STL Gen Error", e);
+              showToast("Failed to generate STL.", 'error');
+          } finally {
+              setIsProcessing(false);
+          }
+      }, 100);
+  };
 
   // --- SVG Export Logic ---
   const downloadSVG = () => { 
@@ -1346,20 +1579,27 @@ export default function IFStudio() {
                             const val = getSourceVal(cx, cy); // 0 (dark) to 1 (light)
                             if (val > 0.95) continue; // Skip white areas
                             
+                            // Enforce Min Thickness in SVG for 3D Mode
+                            let strokeW = Math.max(0.5, gridSize*0.2);
+                            if (is3DMode && strokeW < minFeaturePx) strokeW = minFeaturePx;
+                            
                             const len = strokeLen;
                             const x1 = cx - Math.cos(angle) * len/2;
                             const y1 = cy - Math.sin(angle) * len/2;
                             const x2 = cx + Math.cos(angle) * len/2;
                             const y2 = cy + Math.sin(angle) * len/2;
                             
-                            layerPaths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${Math.max(0.5, gridSize*0.2).toFixed(2)}" stroke-linecap="round" />`);
+                            layerPaths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${strokeW.toFixed(2)}" stroke-linecap="round" />`);
                         }
                     }
                 } else if (mode === 'stipple') {
                     // ... existing stipple logic ...
                     const totalPoints = effectiveRings * 800;
                     const baseScale = maxCropDim / 1000; 
-                    const dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
+                    
+                    // ENFORCED MIN THICKNESS FOR SVG
+                    let dotRadius = Math.max(0.5, lineThickness * 1.5 * baseScale); 
+                    if (is3DMode && (dotRadius * 2) < minFeaturePx) dotRadius = minFeaturePx / 2;
                     
                     for (let i = 0; i < totalPoints; i++) {
                         const seedOffset = layer.key === 'mono' ? 0 : layer.key.charCodeAt(0) * 1000;
@@ -1541,80 +1781,6 @@ export default function IFStudio() {
     }, 100); // Short delay to allow UI to update state to "Processing"
   };
     
-  const downloadPNG = (multiplier) => { // Multiplier argument is now 1 (Native) or 2 (Double)
-    const exportMultiplier = multiplier || 1; 
-    if (!sourceImageRef.current) return;
-    setIsProcessing(true);
-    showToast(`Generating PNG...`, 'success');
-    
-    // Use a small delay to ensure the UI updates before the heavy canvas operation
-    setTimeout(() => {
-        try {
-            const img = sourceImageRef.current;
-            const nativeSize = Math.min(img.width, img.height);
-            
-            let finalAspect = 1.0;
-            if (frameShape === 'custom') {
-                finalAspect = cropAspectW / cropAspectH;
-            } else if (frameShape === 'square') {
-                finalAspect = 1.0;
-            }
-
-            const maxNativeDim = nativeSize * exportMultiplier;
-            let w, h;
-
-            if (frameShape === 'custom' || frameShape === 'square') {
-                if (finalAspect >= 1) {
-                    w = maxNativeDim;
-                    h = maxNativeDim / finalAspect;
-                } else {
-                    h = maxNativeDim;
-                    w = maxNativeDim * finalAspect;
-                }
-            } else { // Circle, defaults to square native size
-                w = maxNativeDim;
-                h = maxNativeDim;
-            }
-
-            const offCanvas = document.createElement('canvas');
-            offCanvas.width = maxNativeDim; // The drawing context size remains square
-            offCanvas.height = maxNativeDim;
-            const ctx = offCanvas.getContext('2d');
-            
-            // Pass the multiplied square size to renderFrame
-            renderFrame(ctx, maxNativeDim, maxNativeDim, true);
-            
-            // Create a final canvas cropped to the final rectangular shape for PNG
-            const finalCanvas = document.createElement('canvas');
-            finalCanvas.width = w;
-            finalCanvas.height = h;
-            const finalCtx = finalCanvas.getContext('2d');
-            
-            // Calculate crop source position from the center of the square drawing area
-            const sourceX = (maxNativeDim - w) / 2;
-            const sourceY = (maxNativeDim - h) / 2;
-
-            finalCtx.drawImage(
-                offCanvas, 
-                sourceX, sourceY, w, h, // Source rectangle
-                0, 0, w, h                // Destination rectangle
-            );
-            
-            // Trigger download
-            const link = document.createElement('a');
-            link.download = `if-studio-${Date.now()}.png`;
-            link.href = finalCanvas.toDataURL('image/png');
-            link.click();
-
-        } catch(e) {
-            console.error("PNG Gen Error", e);
-            showToast("Failed to generate PNG. Check console for details.", 'error');
-        } finally {
-             setIsProcessing(false);
-        }
-    }, 50);
-  };
-    
   // --- Cropping Action ---
   const applyCropAndGoToEdit = () => {
     // 1. Apply LIVE crop settings to FINAL states
@@ -1639,32 +1805,13 @@ export default function IFStudio() {
                     <Layers size={14} className="text-gray-400" />
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pattern Mode</span>
                 </div>
-                <div className="flex gap-2 mb-4">
-                    <ModeButton active={mode === 'spiral'} onClick={() => setMode('spiral')} icon={Disc} label="Spiral" />
-                    <ModeButton active={mode === 'lines'} onClick={() => setMode('lines')} icon={Layers} label="Lines" />
-                    <ModeButton active={mode === 'dots'} onClick={() => setMode('dots')} icon={Grid} label="Dots" />
-                    <ModeButton active={mode === 'stipple'} onClick={() => setMode('stipple')} icon={Sparkles} label="Stipple" />
-                    <ModeButton active={mode === 'flow'} onClick={() => setMode('flow')} icon={Waves} label="Flow" />
-                </div>
-
-                {/* NEW: Quick Presets Section */}
-                <div className="mb-4">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Quick Presets</span>
-                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200">
-                        {PRESETS.map(preset => {
-                            const PIcon = preset.icon;
-                            return (
-                                <button 
-                                    key={preset.id}
-                                    onClick={() => applyPreset(preset)}
-                                    className="flex items-center gap-1.5 px-3 py-2 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-lg text-xs whitespace-nowrap transition-colors text-gray-600 hover:text-blue-600"
-                                >
-                                    <PIcon size={12} />
-                                    <span className="font-medium">{preset.label}</span>
-                                </button>
-                            )
-                        })}
-                    </div>
+                <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
+                    <ModeButton active={mode === 'spiral'} onClick={() => handleModeChange('spiral')} icon={Disc} label="Spiral" />
+                    <ModeButton active={mode === 'lines'} onClick={() => handleModeChange('lines')} icon={Layers} label="Lines" />
+                    <ModeButton active={mode === 'dots'} onClick={() => handleModeChange('dots')} icon={Grid} label="Dots" />
+                    <ModeButton active={mode === 'stipple'} onClick={() => handleModeChange('stipple')} icon={Sparkles} label="Stipple" />
+                    <ModeButton active={mode === 'flow'} onClick={() => handleModeChange('flow')} icon={Waves} label="Flow" />
+                    <ModeButton active={mode === 'photo'} onClick={() => handleModeChange('photo')} icon={PhotoIcon} label="Photo" />
                 </div>
 
                 {/* CONSOLIDATED PATTERN SETTINGS SECTION */}
@@ -1680,38 +1827,49 @@ export default function IFStudio() {
                             </div>
                         </div>
                     )}
+                    
+                    {mode === 'photo' && (
+                        <div className="p-3 bg-blue-50 text-blue-800 text-[10px] rounded-lg mb-4">
+                             Photo mode passes the image through without applying a vector pattern. Useful for standard Lithophanes.
+                        </div>
+                    )}
+
                     <div className="flex items-center justify-between mt-2 mb-4">
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pattern Parameters</span>
                         <button onClick={resetPatternSettings} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset Pattern">
                                 <RotateCcw size={14}/>
                         </button>
                     </div>
-                    <Slider 
-                        highlight 
-                        label={currentLabels.density} 
-                        value={rings} 
-                        // INCREASED RANGE: Up to 500 for Stipple (400k points), 200 for others
-                        min={10} max={mode === 'stipple' ? 500 : 200} step={1} 
-                        onChange={(v) => updateSetting('rings', v)} 
-                        icon={Circle}
-                        tooltip={currentLabels.densityTooltip} 
-                        onReset={handleSliderReset}
-                        resetValue={mode === 'stipple' ? 150 : DEFAULT_PATTERN_SETTINGS.rings}
-                        settingKey="rings"
-                    />
-                    <Slider 
-                        highlight 
-                        label={currentLabels.thickness} 
-                        value={lineThickness} 
-                        min={0.1} max={2.0} step={0.05} 
-                        onChange={(v) => updateSetting('thickness', v)} 
-                        icon={Zap}
-                        tooltip={currentLabels.thicknessTooltip} 
-                        onReset={handleSliderReset}
-                        resetValue={DEFAULT_PATTERN_SETTINGS.thickness}
-                        settingKey="thickness"
-                    />
-                    {mode !== 'stipple' && mode !== 'flow' && (
+                    {mode !== 'photo' && (
+                        <>
+                        <Slider 
+                            highlight 
+                            label={currentLabels.density} 
+                            value={rings} 
+                            // INCREASED RANGE: Up to 500 for Stipple (400k points), 200 for others
+                            min={10} max={mode === 'stipple' ? 500 : 200} step={1} 
+                            onChange={(v) => updateSetting('rings', v)} 
+                            icon={Circle}
+                            tooltip={currentLabels.densityTooltip} 
+                            onReset={handleSliderReset}
+                            resetValue={mode === 'stipple' ? 150 : DEFAULT_PATTERN_SETTINGS.rings}
+                            settingKey="rings"
+                        />
+                        <Slider 
+                            highlight 
+                            label={currentLabels.thickness} 
+                            value={lineThickness} 
+                            min={0.1} max={2.0} step={0.05} 
+                            onChange={(v) => updateSetting('thickness', v)} 
+                            icon={Zap}
+                            tooltip={currentLabels.thicknessTooltip} 
+                            onReset={handleSliderReset}
+                            resetValue={DEFAULT_PATTERN_SETTINGS.thickness}
+                            settingKey="thickness"
+                        />
+                        </>
+                    )}
+                    {mode !== 'stipple' && mode !== 'flow' && mode !== 'photo' && (
                         <Slider 
                             label="Rotation" 
                             value={rotation} 
@@ -1794,15 +1952,25 @@ export default function IFStudio() {
                   </div>
                   
                   {/* COLOR MODE SELECTOR */}
-                  <div className="flex p-1 bg-gray-100 rounded-lg mb-4">
-                      <button onClick={() => setColorMode('mono')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'mono' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Monochrome</button>
-                      <button onClick={() => setColorMode('cmyk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'cmyk' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>CMYK Layers</button>
-                  </div>
+                  {/* Hide if Litho Preview OR Photo Mode is active (Photo mode forces mono/single layer) */}
+                  {!lithoPreview && mode !== 'photo' ? (
+                      <div className="flex p-1 bg-gray-100 rounded-lg mb-4">
+                          <button onClick={() => setColorMode('mono')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'mono' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Monochrome</button>
+                          <button onClick={() => setColorMode('cmyk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'cmyk' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>CMYK Layers</button>
+                      </div>
+                  ) : (
+                      <div className="p-3 bg-blue-50 text-blue-800 text-[10px] rounded-lg mb-4">
+                          {mode === 'photo' 
+                            ? "Photo mode is strictly single-layer (Monochrome/Grayscale)." 
+                            : "Lithophanes use luminance to generate height. Color separation is disabled."}
+                      </div>
+                  )}
 
                   <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                      {colorMode === 'mono' ? (
+                      {/* Force Mono UI if in Photo Mode, regardless of colorMode state */}
+                      {(colorMode === 'mono' || mode === 'photo') ? (
                           <>
-                            <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColor} />
+                            {!lithoPreview && <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColor} />}
                             <Toggle label="Invert Brightness" active={invert} onToggle={() => setInvert(!invert)} icon={Zap} />
                           </>
                       ) : (
@@ -1830,45 +1998,123 @@ export default function IFStudio() {
                   </section>
               </div>
           );
+          
+          case 'litho': return (
+              <>
+                 <div className="mb-3 flex items-center gap-2">
+                    <Box size={14} className="text-gray-400" />
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">3D Lithophane</span>
+                 </div>
+                 
+                 <div className="mb-6"> {/* Removed md:hidden to show on desktop */}
+                    <Toggle 
+                        label="Enable 3D Preview" 
+                        description="Simulate Lithophane lighting on current pattern."
+                        active={lithoPreview} 
+                        onToggle={() => setLithoPreview(!lithoPreview)} 
+                        icon={BoxSelect} 
+                    />
+                </div>
+                
+                <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between mt-2 mb-4">
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">3D Parameters</span>
+                         <button onClick={() => {updateSetting('widthMm', 100); updateSetting('minDepth', 0.8); updateSetting('maxDepth', 3.0); updateSetting('resolution', 0.5); showToast("Litho Reset");}} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset Litho">
+                                <RotateCcw size={14}/>
+                        </button>
+                    </div>
+                    
+                    <Slider 
+                        label="Physical Width (mm)" 
+                        value={modeSettings.litho.widthMm} 
+                        min={20} max={300} step={1} 
+                        onChange={(v) => updateSetting('widthMm', v)} 
+                        icon={Ruler}
+                        tooltip="The physical width of the printed lithophane."
+                        settingKey="widthMm"
+                    />
+                    <div className="grid grid-cols-2 gap-3">
+                        <Slider 
+                            label="Min Depth" 
+                            value={modeSettings.litho.minDepth} 
+                            min={0.2} max={2.0} step={0.1} 
+                            onChange={(v) => updateSetting('minDepth', v)} 
+                            tooltip="Thinnest part of print (Lightest areas)."
+                            settingKey="minDepth"
+                        />
+                        <Slider 
+                            label="Max Depth" 
+                            value={modeSettings.litho.maxDepth} 
+                            min={1.0} max={6.0} step={0.1} 
+                            onChange={(v) => updateSetting('maxDepth', v)} 
+                            tooltip="Thickest part of print (Darkest areas)."
+                            settingKey="maxDepth"
+                        />
+                    </div>
+                    <Slider 
+                        highlight
+                        label="Voxel Resolution" 
+                        value={modeSettings.litho.resolution} 
+                        min={0.1} max={1.0} step={0.1} 
+                        onChange={(v) => updateSetting('resolution', v)} 
+                        icon={Scaling}
+                        tooltip="Higher = More detail but larger file size (slower)."
+                        settingKey="resolution"
+                    />
+                </section>
+              </>
+          );
+
           case 'download': return (
               <div className="space-y-4">
                       <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
                       
                       {/* 3D MODE / MIN THICKNESS CONTROLS */}
-                      <Toggle 
-                          label="3D Print Mode" 
-                          description="Enforce minimum line thickness for printer compatibility."
-                          active={is3DMode} 
-                          onToggle={() => setIs3DMode(!is3DMode)} 
-                          icon={Printer} 
-                      />
-                      {is3DMode && (
-                              <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in">
-                                  <Slider 
-                                      label="Min Thickness (mm)" 
-                                      value={minThickness} 
-                                      min={0.3} 
-                                      max={1.0} 
-                                      step={0.01} 
-                                      onChange={setMinThickness} 
-                                      onReset={handleSliderReset}
-                                      resetValue={DEFAULT_MIN_THICKNESS}
-                                      settingKey="minThickness"
-                                  />
-                              </div>
+                      {/* Hide for Photo Mode as it doesn't use vector thickness logic */}
+                      {!lithoPreview && mode !== 'photo' && (
+                          <>
+                             <Toggle 
+                                label="3D Print Mode" 
+                                description="Enforce minimum line thickness for printer compatibility."
+                                active={is3DMode} 
+                                onToggle={() => setIs3DMode(!is3DMode)} 
+                                icon={Printer} 
+                            />
+                            {is3DMode && (
+                                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in">
+                                        <Slider 
+                                            label="Min Thickness (mm)" 
+                                            value={minThickness} 
+                                            min={0.1} 
+                                            max={1.0} 
+                                            step={0.01} 
+                                            onChange={setMinThickness} 
+                                            onReset={handleSliderReset}
+                                            resetValue={DEFAULT_MIN_THICKNESS}
+                                            settingKey="minThickness"
+                                        />
+                                    </div>
+                            )}
+                         </>
                       )}
                       
                       {/* DOWNLOAD BUTTONS */}
                       <div className="pt-4 border-t border-gray-100">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Download Files (Native Resolution)</span>
+                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Download Files</span>
                           <div className="grid grid-cols-2 gap-2">
-                              {/* Final Export Buttons (1x Native Resolution) */}
+                              {/* FINAL Export Buttons */}
                               <button onClick={() => downloadSVG()} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm disabled:opacity-50 transition-colors">
-                                   <Layers size={14} className="mb-0.5" /> SVG (Vector)
+                                    <Layers size={14} className="mb-0.5" /> SVG (Vector)
                               </button>
                               <button onClick={() => downloadPNG(1)} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm disabled:opacity-50 transition-colors">
-                                   <ImageIcon size={14} className="mb-0.5" /> PNG (Raster)
+                                    <ImageIcon size={14} className="mb-0.5" /> PNG (Raster)
                               </button>
+                              {/* NEW: STL Button (Conditional) */}
+                              {lithoPreview && (
+                                <button onClick={() => downloadSTL()} disabled={!imageSrc} className="col-span-2 flex flex-row gap-2 items-center justify-center py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg font-bold text-xs border border-gray-200 shadow-sm disabled:opacity-50 transition-colors">
+                                    <Box size={14} /> STL (Lithophane)
+                                </button>
+                              )}
                           </div>
                       </div>
                       </section>
@@ -2029,6 +2275,7 @@ export default function IFStudio() {
                   </section>
                   <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
                       <div className="flex items-center gap-2 mb-6 text-orange-500 text-xs font-bold uppercase tracking-wider"><Settings size={14} /> Export Settings</div>
+                      {renderControls('litho')}
                       {renderControls('download')}
                   </section>
               </div>
@@ -2123,6 +2370,7 @@ export default function IFStudio() {
                   <button onClick={() => handleMobileTabClick('pattern')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'pattern' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Layers size={20}/><span className="text-[9px] font-medium">Pattern</span></button>
                   <button onClick={() => handleMobileTabClick('tune')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'tune' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Move size={20}/><span className="text-[9px] font-medium">Tune</span></button>
                   <button onClick={() => handleMobileTabClick('color')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'color' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Palette size={20}/><span className="text-[9px] font-medium">Color</span></button>
+                  <button onClick={() => handleMobileTabClick('litho')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'litho' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Box size={20}/><span className="text-[9px] font-medium">3D / Litho</span></button>
                   <button onClick={() => handleMobileTabClick('download')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'download' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`}><Download size={20}/><span className="text-[9px] font-medium">Download</span></button>
               </div>
           </div>
