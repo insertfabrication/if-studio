@@ -347,6 +347,7 @@ export default function IFStudio() {
 
   // --- Actions ---
   useEffect(() => {
+      // Initialize sidebar state based on screen size (desktop always open, mobile closed)
       if (window.innerWidth < 768) {
           setSidebarOpen(false);
           setActiveTab(null); 
@@ -1385,7 +1386,7 @@ export default function IFStudio() {
 
         <div className="p-6 space-y-8 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 flex-1">
           {step === 'crop' ? (
-              renderCropControls() // Use new render function
+              renderCropControls() // Desktop crop panel
           ) : (
               <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
                   <div className="flex items-center justify-between p-1">
@@ -1477,12 +1478,13 @@ export default function IFStudio() {
             )}
         </div>
 
-        {/* Mobile Bottom Control Panel (Visible when not cropping) */}
+        {/* Mobile Bottom Control Panel (Visible across all non-desktop views) */}
         <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
-            {/* CROP MODE PANEL (Replaces bottom bar) */}
+            
+            {/* 1. CROP MODE PANEL (Visible when step === 'crop') */}
             {step === 'crop' && (
                 <div className="bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-full duration-300">
-                    {/* Scrollable controls section with 40vh limit */}
+                    {/* Scrollable controls section, limited to 40vh */}
                     <div className="px-4 pt-4 overflow-y-auto" style={{ maxHeight: '40vh' }}>
                          {renderMobileCropControls()} 
                     </div>
@@ -1493,7 +1495,7 @@ export default function IFStudio() {
                 </div>
             )}
 
-            {/* EDIT MODE TABS AND CONTROLS */}
+            {/* 2. EDIT MODE TABS AND CONTROLS (Visible when step === 'edit') */}
             {step === 'edit' && (
                 <>
                     {/* Control content/functionality rendering (constrained to 40vh) */}
@@ -1506,7 +1508,7 @@ export default function IFStudio() {
                             {renderControls(activeTab)}
                         </div>
                     )}
-                    {/* Navigation buttons - always visible when in edit mode */}
+                    {/* Navigation buttons - active and clickable */}
                     <div className="flex justify-around items-center h-14 bg-white">
                         {['pattern', 'tune', 'color', 'download'].map(tab => {
                             const Icon = { pattern: Layers, tune: Move, color: Palette, download: Download }[tab];
@@ -1531,7 +1533,7 @@ export default function IFStudio() {
                 </>
             )}
 
-             {/* UPLOAD/BLANK SCREEN BOTTOM BAR (Shows disabled icons but is clickable) */}
+             {/* 3. UPLOAD/BLANK SCREEN BOTTOM BAR (Visible when step === 'upload') */}
              {step === 'upload' && (
                  <div className="flex justify-around items-center h-14 bg-white border-t border-gray-100">
                     {['pattern', 'tune', 'color', 'download'].map(tab => {
@@ -1542,7 +1544,7 @@ export default function IFStudio() {
                             <button 
                                 key={tab}
                                 onClick={() => showToast("Upload an image first to access controls.", 'info')}
-                                disabled={true}
+                                disabled={true} // Visually disabled
                                 className="flex flex-col items-center gap-0.5 p-1 w-14 transition-colors text-gray-300 cursor-not-allowed"
                             >
                                 <Icon size={20}/>
