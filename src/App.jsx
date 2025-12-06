@@ -427,7 +427,6 @@ export default function IFStudio() {
   const handleMobileTabClick = (tab) => {
       if (!imageSrc) {
           // No functionality until image is uploaded
-          // Optionally show a quick prompt to upload, but sticking to "no functionality"
           return;
       }
       
@@ -1398,9 +1397,10 @@ export default function IFStudio() {
         className="flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0"
         ref={containerRef}
       >
-        {/* Main Content */}
+        {/* Main Content (The visible canvas area) */}
         <div 
-            className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-4 md:p-8 min-h-0" /* Added min-h-0 */
+            // ADDED pb-16 to ensure space for fixed mobile footer (h-16 is max height)
+            className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-4 md:p-8 min-h-0 pb-16" 
             onMouseDown={handleStart} onMouseMove={handleMove} onMouseUp={handleEnd} onMouseLeave={handleEnd}
             onTouchStart={handleTouchStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
             onDoubleClick={handleDoubleClick}
@@ -1451,9 +1451,9 @@ export default function IFStudio() {
             )}
         </div>
 
-      {/* Mobile Bottom Navigation (Edit/Upload Modes) - NOW ALWAYS VISIBLE UNLESS CROPPING */}
+      {/* Mobile Bottom Navigation (Edit/Upload Modes) - NOW FIXED BOTTOM */}
       {step !== 'crop' && (
-          <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
               {/* Drawer Content - ONLY SHOW IF imageSrc AND activeTab (in edit mode) */}
               {imageSrc && activeTab && step === 'edit' && (
                   <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[45vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
@@ -1474,9 +1474,9 @@ export default function IFStudio() {
           </div>
       )}
           
-      {/* Mobile Bottom Navigation (Crop Mode Only) */}
+      {/* Mobile Bottom Navigation (Crop Mode Only) - NOW FIXED BOTTOM */}
       {step === 'crop' && (
-           <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
+           <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
               {activeCropTab && (
                   <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[45vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
                        <div className="flex justify-between items-center mb-3">
