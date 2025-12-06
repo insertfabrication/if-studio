@@ -1236,7 +1236,7 @@ export default function IFStudio() {
       }
   }
     
-  // --- UI RENDER (Crop Input Section - Desktop/Sidebar) ---
+  // --- UI RENDER (Desktop Crop Panel) ---
   const renderCropControls = () => (
       <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
           <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
@@ -1346,12 +1346,13 @@ export default function IFStudio() {
   );
 
   return (
+    // Outer container: Full height, overflow hidden (correct)
     <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }}>
 
       <StatusToast toast={toast} onClose={() => setToast({ message: null, type: 'info' })} />
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
 
-      {/* MOBILE HEADER */}
+      {/* MOBILE HEADER (Fixed Top) */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40">
            <div className="flex items-center gap-2 font-bold text-gray-800 text-sm"><Activity className="text-[#3B82F6]" size={16}/> IF Studio</div>
            <div className="flex items-center gap-2">
@@ -1366,14 +1367,14 @@ export default function IFStudio() {
                         <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                     </label>
                 )}
-                {/* Help button is always visible */}
+                {/* Help button - always visible */}
                 <button onClick={() => setShowAbout(true)} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg" title="About / Help">
                     <HelpCircle size={18}/>
                 </button>
            </div>
       </div>
 
-      {/* DESKTOP SIDEBAR */}
+      {/* DESKTOP SIDEBAR (Fixed Left) */}
       <div className={`hidden md:flex fixed inset-y-0 left-0 w-96 bg-gray-50 border-r border-gray-200 flex-col overflow-hidden shadow-xl z-40`}>
         <div className="p-6 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -1421,14 +1422,14 @@ export default function IFStudio() {
         )}
       </div>
 
-      {/* CANVAS AREA */}
+      {/* CANVAS AREA (Main Content) */}
       <div 
         className="flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0"
         ref={containerRef}
       >
-        {/* Main Content */}
+        {/* Main Content (Canvas Wrapper) - Added pb-14 for mobile to avoid fixed bar obstruction */}
         <div 
-            className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-4 md:p-8 min-h-0" /* Added min-h-0 */
+            className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-4 md:p-8 min-h-0 pb-14 md:pb-8" /* pb-14 compensates for the fixed bottom nav bar (h-14) */
             onMouseDown={handleStart} onMouseMove={handleMove} onMouseUp={handleEnd} onMouseLeave={handleEnd}
             onTouchStart={handleTouchStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
             onDoubleClick={handleDoubleClick}
@@ -1477,85 +1478,68 @@ export default function IFStudio() {
             </div> 
             )}
         </div>
-
-        {/* Mobile Bottom Control Panel (Visible across all non-desktop views) */}
-        <div className="md:hidden bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
-            
-            {/* 1. CROP MODE PANEL (Visible when step === 'crop') */}
-            {step === 'crop' && (
-                <div className="bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)] animate-in slide-in-from-bottom-full duration-300">
-                    {/* Scrollable controls section, limited to 40vh */}
-                    <div className="px-4 pt-4 overflow-y-auto" style={{ maxHeight: '40vh' }}>
-                         {renderMobileCropControls()} 
-                    </div>
-                    {/* Fixed Apply button */}
-                    <div className="p-4 border-t border-gray-100">
-                        <button onClick={applyCropAndGoToEdit} className="w-full py-3.5 bg-[#3B82F6] text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">Apply & Edit</button>
-                    </div>
-                </div>
-            )}
-
-            {/* 2. EDIT MODE TABS AND CONTROLS (Visible when step === 'edit') */}
-            {step === 'edit' && (
-                <>
-                    {/* Control content/functionality rendering (constrained to 40vh) */}
-                    {activeTab && (
-                        <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[40vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
-                            <div className="flex justify-between items-center mb-3">
-                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeTab} controls</span>
-                                <button onClick={() => setActiveTab(null)} className="p-1 text-gray-400 hover:text-gray-600"><X size={14}/></button>
-                            </div>
-                            {renderControls(activeTab)}
-                        </div>
-                    )}
-                    {/* Navigation buttons - active and clickable */}
-                    <div className="flex justify-around items-center h-14 bg-white">
-                        {['pattern', 'tune', 'color', 'download'].map(tab => {
-                            const Icon = { pattern: Layers, tune: Move, color: Palette, download: Download }[tab];
-                            const label = tab.charAt(0).toUpperCase() + tab.slice(1);
-                            
-                            return (
-                                <button 
-                                    key={tab}
-                                    onClick={() => handleMobileTabClick(tab)}
-                                    className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${
-                                        activeTab === tab 
-                                            ? 'text-[#3B82F6]'
-                                            : 'text-gray-400 hover:text-[#3B82F6]'
-                                    }`}
-                                >
-                                    <Icon size={20}/>
-                                    <span className="text-[9px] font-medium">{label}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </>
-            )}
-
-             {/* 3. UPLOAD/BLANK SCREEN BOTTOM BAR (Visible when step === 'upload') */}
-             {step === 'upload' && (
-                 <div className="flex justify-around items-center h-14 bg-white border-t border-gray-100">
-                    {['pattern', 'tune', 'color', 'download'].map(tab => {
-                        const Icon = { pattern: Layers, tune: Move, color: Palette, download: Download }[tab];
-                        const label = tab.charAt(0).toUpperCase() + tab.slice(1);
-                        
-                        return (
-                            <button 
-                                key={tab}
-                                onClick={() => showToast("Upload an image first to access controls.", 'info')}
-                                disabled={true} // Visually disabled
-                                className="flex flex-col items-center gap-0.5 p-1 w-14 transition-colors text-gray-300 cursor-not-allowed"
-                            >
-                                <Icon size={20}/>
-                                <span className="text-[9px] font-medium">{label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-             )}
-        </div>
         
+      </div>
+
+      {/* MOBILE BOTTOM CONTROL PANEL (FIXED to Viewport) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
+          
+          {/* 1. SLIDING CONTROL PANEL (max-h for controls or crop) */}
+          {(step === 'crop' || (step === 'edit' && activeTab)) && (
+               <div className="bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.1)] border-t border-gray-100 animate-in slide-in-from-bottom-10">
+                   {/* Scrollable content area, height constrained to 40vh minus the action button bar (p-4 + p-4 ~ 65px) */}
+                   <div className="px-4 pt-4 overflow-y-auto" style={{ maxHeight: 'calc(40vh - 65px)' }}> 
+                      {step === 'crop' && renderMobileCropControls()}
+                      {step === 'edit' && activeTab && (
+                          <div className="space-y-4">
+                              <div className="flex justify-between items-center mb-3">
+                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeTab} controls</span>
+                                  <button onClick={() => setActiveTab(null)} className="p-1 text-gray-400 hover:text-gray-600"><X size={14}/></button>
+                              </div>
+                              {renderControls(activeTab)}
+                          </div>
+                      )}
+                   </div>
+
+                   {/* Fixed Action Button/Close for the Sliding Panel */}
+                   <div className="p-4 border-t border-gray-100 flex justify-center">
+                       {step === 'crop' ? (
+                           <button onClick={applyCropAndGoToEdit} className="w-full py-3.5 bg-[#3B82F6] text-white rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">Apply & Edit</button>
+                       ) : (
+                           <button onClick={() => setActiveTab(null)} className="py-2.5 px-6 bg-gray-100 text-gray-500 rounded-xl font-bold active:scale-95 transition-transform text-sm">Close Controls</button>
+                       )}
+                   </div>
+               </div>
+          )}
+          
+          {/* 2. PERSISTENT NAVIGATION ROW (Always visible) */}
+          {/* Note: This row is intentionally visible in 'upload' mode, but disabled */}
+          {step !== 'crop' && (
+              <div className="flex justify-around items-center h-14 bg-white border-t border-gray-200 pb-safe">
+                  {['pattern', 'tune', 'color', 'download'].map(tab => {
+                      const Icon = { pattern: Layers, tune: Move, color: Palette, download: Download }[tab];
+                      const label = tab.charAt(0).toUpperCase() + tab.slice(1);
+                      const disabled = step !== 'edit';
+                      
+                      return (
+                          <button 
+                              key={tab}
+                              onClick={() => disabled ? showToast("Upload an image first to access controls.", 'info') : handleMobileTabClick(tab)}
+                              disabled={disabled}
+                              className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${
+                                  (activeTab === tab && !disabled) 
+                                      ? 'text-[#3B82F6]'
+                                      : disabled ? 'text-gray-300' : 'text-gray-400 hover:text-[#3B82F6]'
+                              } ${disabled ? 'cursor-not-allowed' : ''}`}
+                          >
+                              <Icon size={20}/>
+                              <span className="text-[9px] font-medium">{label}</span>
+                          </button>
+                      );
+                  })}
+              </div>
+          )}
+
       </div>
       
       {/* SEO Footer */}
