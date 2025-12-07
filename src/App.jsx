@@ -2,209 +2,82 @@ import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon, Dice5, Monitor, Smartphone, GripHorizontal } from 'lucide-react';
 
 /**
- * IF Studio - Advanced Halftone & Spiral Image Engine By Insert Fabrication
- * v3.39 - Accessibility & Performance: a11y attributes, removed backdrop-blur, optimized contexts.
+ * IF Studio - Ultimate Version (v1.2)
+
  */
 
 // --- Constants ---
-const THEME_COLOR = '#3B82F6'; // Electric Blue
-const MAX_IMPORT_RESOLUTION = 2048; // Limit input images to 2k to prevent browser crashes
-const DEFAULT_PATTERN_SETTINGS = {
-    rings: 60,
-    thickness: 0.5,
-    rotation: 0,
-    dotShape: 'circle'
-};
+const THEME_COLOR = '#3B82F6';
+const MAX_IMPORT_RESOLUTION = 2048; 
+const DEFAULT_PATTERN_SETTINGS = { rings: 60, thickness: 0.5, rotation: 0, dotShape: 'circle' };
 const DEFAULT_MIN_THICKNESS = 0.32;
+const CMYK_ANGLES = { c: 15, m: 75, y: 0, k: 45 };
+const CMYK_COLORS = { c: '#00FFFF', m: '#FF00FF', y: '#FFFF00', k: '#000000' };
+const MOBILE_NAV_HEIGHT = 64; 
 
-// CMYK Configuration
-const CMYK_ANGLES = {
-    c: 15,
-    m: 75,
-    y: 0,
-    k: 45
-};
-
-const CMYK_COLORS = {
-    c: '#00FFFF',
-    m: '#FF00FF',
-    y: '#FFFF00',
-    k: '#000000'
-};
-
-// Define fixed heights for UI elements on mobile
-const MOBILE_HEADER_HEIGHT = 48; // h-12
-const MOBILE_NAV_HEIGHT = 56;    // h-14 (edit mode) or h-16 (crop mode)
-
-// --- Components (Memoized for Performance) ---
+// --- Helper Components ---
 
 const Tooltip = memo(({ text }) => (
   <div className="group relative inline-block ml-2">
     <Info size={12} className="text-gray-400 hover:text-[#3B82F6] transition-colors cursor-help" />
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-40 p-2 bg-white border border-gray-200 text-[10px] text-gray-600 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 pointer-events-none text-center leading-relaxed">
-      {text}
-      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white" />
+    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-white border border-gray-200 text-[10px] text-gray-600 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50 pointer-events-none text-center leading-relaxed">
+      {text}<div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-white" />
     </div>
   </div>
 ));
 
-const Slider = memo(({ label, value, min, max, step, onChange, icon: Icon, highlight, formatValue, tooltip, onReset, resetValue, settingKey }) => (
+const Slider = memo(({ label, value, min, max, step, onChange, icon: Icon, highlight, tooltip, onReset, resetValue, settingKey }) => (
   <div className="mb-3 md:mb-5 group">
     <div className="flex justify-between items-center mb-1">
-      <label htmlFor={settingKey} className={`flex items-center gap-1.5 text-xs md:text-sm font-semibold ${highlight ? 'text-blue-600' : 'text-gray-600'}`}>
+      <label className={`flex items-center gap-1.5 text-xs md:text-sm font-semibold ${highlight ? 'text-blue-600' : 'text-gray-600'}`}>
         {Icon && <Icon size={14} className={`md:w-4 md:h-4 ${highlight ? "text-[#3B82F6]" : "text-gray-400"}`} />}
         {label}
         {tooltip && <Tooltip text={tooltip} />}
         {onReset && (
-            <button
-                onClick={() => onReset(settingKey, resetValue)}
-                className="p-0.5 ml-1 rounded-full text-gray-300 hover:text-blue-500 transition-colors duration-150 transform hover:rotate-180 disabled:opacity-0"
-                disabled={value === resetValue}
-                title="Reset to Default"
-                aria-label={`Reset ${label}`}
-            >
+            <button onClick={() => onReset(settingKey, resetValue)} className="p-0.5 ml-1 rounded-full text-gray-300 hover:text-blue-500 transition-colors duration-150 transform hover:rotate-180 disabled:opacity-0" disabled={value === resetValue} title="Reset">
                 <RotateCcw size={12} />
             </button>
         )}
       </label>
-      {/* Direct Value Input */}
-      <input 
-        id={`${settingKey}-val`}
-        title={`${label} value`}
-        aria-label={`${label} value`}
-        type="number" 
-        value={typeof value === 'number' ? (Number.isInteger(step) ? value : value.toFixed(2)) : value}
-        onChange={(e) => {
-            const val = parseFloat(e.target.value);
-            if (!isNaN(val)) onChange(val);
-        }}
-        step={step}
-        className="text-[10px] md:text-xs text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200 w-16 text-right focus:ring-1 focus:ring-blue-300 outline-none"
-      />
+      <input type="number" value={typeof value === 'number' ? (Number.isInteger(step) ? value : value.toFixed(2)) : value} onChange={(e) => { const val = parseFloat(e.target.value); if (!isNaN(val)) onChange(val); }} step={step} className="text-[10px] md:text-xs text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200 w-16 text-right focus:ring-1 focus:ring-blue-300 outline-none" />
     </div>
     <div className="relative h-5 md:h-6 flex items-center">
-      <input
-        id={settingKey}
-        title={label}
-        aria-label={label}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="absolute w-full h-1.5 md:h-2 bg-gray-200 rounded-full appearance-none cursor-pointer transition-all duration-100 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 z-10"
-        style={{
-            backgroundImage: `linear-gradient(${THEME_COLOR}, ${THEME_COLOR})`,
-            backgroundSize: `${((value - min) * 100) / (max - min)}% 100%`,
-            backgroundRepeat: 'no-repeat'
-        }}
-      />
-      <style>{`
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            height: 16px;
-            width: 16px;
-            border-radius: 50%;
-            background: #ffffff;
-            border: 3px solid #3B82F6;
-            cursor: pointer;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            transition: all 0.1s ease-out;
-            margin-top: 0px; 
-        }
-        input[type=range]::-webkit-slider-thumb:active {
-            transform: scale(1.1);
-        }
-        input[type=range]::-moz-range-thumb {
-            height: 16px;
-            width: 16px;
-            border: 3px solid #3B82F6;
-            border-radius: 50%;
-            background: #ffffff;
-            cursor: pointer;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            transition: all 0.1s ease-out;
-        }
-        @media (min-width: 768px) {
-            input[type=range]::-webkit-slider-thumb { height: 18px; width: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); border-width: 2px; }
-            input[type=range]::-moz-range-thumb { height: 18px; width: 18px; box-shadow: 0 2px 5px rgba(0,0,0,0.15); border-width: 2px; }
-        }
-      `}</style>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="absolute w-full h-1.5 md:h-2 bg-gray-200 rounded-full appearance-none cursor-pointer transition-all duration-100 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 z-10" style={{ backgroundImage: `linear-gradient(${THEME_COLOR}, ${THEME_COLOR})`, backgroundSize: `${((value - min) * 100) / (max - min)}% 100%`, backgroundRepeat: 'no-repeat' }} />
+      <style>{`input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #ffffff; border: 3px solid #3B82F6; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.1s ease-out; margin-top: 0px; } input[type=range]::-webkit-slider-thumb:active { transform: scale(1.1); }`}</style>
     </div>
   </div>
 ));
 
 const ModeButton = memo(({ active, onClick, icon: Icon, label }) => (
-  <button
-    onClick={onClick}
-    title={label}
-    aria-pressed={active}
-    className={`flex-1 flex flex-col items-center justify-center py-2 px-1 md:py-3 md:px-2 rounded-xl transition-all duration-200 active:scale-95 hover:scale-[1.02] hover:shadow-md ${
-      active
-        ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-lg ring-1 ring-blue-300'
-        : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-500'
-    }`}
-  >
+  <button onClick={onClick} className={`flex-1 flex flex-col items-center justify-center py-2 px-1 md:py-3 md:px-2 rounded-xl transition-all duration-200 active:scale-95 hover:scale-[1.02] hover:shadow-md ${active ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-lg ring-1 ring-blue-300' : 'bg-white border-gray-200 text-gray-500 hover:border-blue-300 hover:text-blue-500'}`}>
     <Icon size={20} className="mb-1 md:mb-1.5 md:w-6 md:h-6" />
     <span className="text-[10px] md:text-xs font-bold tracking-wide">{label}</span>
   </button>
 ));
 
 const ShapeButton = memo(({ active, onClick, icon: Icon, label, rotateIcon }) => (
-    <button
-      onClick={onClick}
-      title={label}
-      aria-label={label}
-      aria-pressed={active}
-      className={`flex-1 flex items-center justify-center p-2 md:p-2.5 rounded-lg transition-all duration-200 active:scale-95 ${
-        active
-          ? 'bg-blue-50 border-blue-500 text-blue-600'
-          : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-      }`}
-    >
+    <button onClick={onClick} title={label} className={`flex-1 flex items-center justify-center p-2 md:p-2.5 rounded-lg transition-all duration-200 active:scale-95 ${active ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
       <Icon size={16} className={`md:w-[18px] md:h-[18px] ${rotateIcon ? "rotate-45" : ""}`} />
     </button>
-  ));
+));
 
 const ColorPicker = memo(({ label, value, onChange, disabled }) => (
     <div className={`flex items-center justify-between p-2 md:p-3 rounded-xl border border-gray-200 bg-gray-50/50 transition-colors duration-150 ${disabled ? 'opacity-50 cursor-not-allowed' : 'hover:border-blue-300'}`}>
-      <label htmlFor="ink-color-picker" className="text-xs md:text-sm font-medium text-gray-600">{label}</label>
+      <label className="text-xs md:text-sm font-medium text-gray-600">{label}</label>
       <div className="flex items-center gap-2 md:gap-3">
           <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">{value}</span>
           <div className="relative w-6 h-6 md:w-8 md:h-8 rounded-full overflow-hidden border border-gray-300 shadow-sm ring-1 ring-white cursor-pointer hover:scale-105 transition-transform duration-150">
-              <input 
-                  type="color" 
-                  id="ink-color-picker"
-                  title={label}
-                  aria-label={label}
-                  value={value} 
-                  onChange={(e) => onChange(e.target.value)}
-                  disabled={disabled}
-                  className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] cursor-pointer p-0 border-0"
-              />
+              <input type="color" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="absolute -top-1/2 -left-1/2 w-[200%] h-[200%] cursor-pointer p-0 border-0" />
           </div>
       </div>
     </div>
 ));
 
 const Toggle = memo(({ label, active, onToggle, icon: Icon, description }) => (
-  <button
-    onClick={onToggle}
-    title={label}
-    aria-pressed={active}
-    className={`w-full flex items-center justify-between p-2.5 md:p-3 rounded-xl border transition-all duration-200 text-left active:scale-[0.99] ${
-      active
-        ? 'bg-blue-50 border-blue-200 text-blue-700'
-        : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-    }`}
-  >
+  <button onClick={onToggle} className={`w-full flex items-center justify-between p-2.5 md:p-3 rounded-xl border transition-all duration-200 text-left active:scale-[0.99] ${active ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
     <div className="flex items-center gap-2 md:gap-3">
         {Icon && <Icon size={16} className={`md:w-[18px] md:h-[18px] ${active ? "text-blue-600" : "text-gray-400"}`} />}
-        <div>
-            <span className="text-xs md:text-sm font-semibold block">{label}</span>
-            {description && <span className="text-[10px] opacity-70 font-normal block mt-0.5">{description}</span>}
-        </div>
+        <div><span className="text-xs md:text-sm font-semibold block">{label}</span>{description && <span className="text-[10px] opacity-70 font-normal block mt-0.5">{description}</span>}</div>
     </div>
     <div className={`w-8 h-4 md:w-10 md:h-5 rounded-full relative transition-colors duration-300 flex-shrink-0 ${active ? 'bg-[#3B82F6]' : 'bg-gray-300'}`}>
       <div className={`absolute top-0.5 md:top-1 w-3 h-3 md:w-3 md:h-3 bg-white rounded-full transition-transform duration-300 shadow-sm ${active ? 'translate-x-4 md:translate-x-6' : 'translate-x-0.5 md:translate-x-1'}`} />
@@ -219,9 +92,7 @@ const StatusToast = memo(({ toast, onClose }) => {
         <div className={`absolute top-16 md:top-6 left-1/2 -translate-x-1/2 z-[70] px-4 py-2 md:px-6 md:py-3 rounded-full shadow-xl bg-white border border-gray-100 flex items-center gap-2 md:gap-3 animate-in slide-in-from-top-4 fade-in duration-300 max-w-[90%] w-auto mx-auto ${isError ? 'text-red-600' : 'text-emerald-600'}`}>
             {isError ? <AlertTriangle size={16} /> : <Check size={16} />}
             <span className="text-xs md:text-sm font-medium whitespace-nowrap">{toast.message}</span>
-            <button onClick={onClose} className="p-0.5 md:p-1 hover:bg-gray-100 rounded-full transition-colors" title="Close Notification">
-                <X size={14} />
-            </button>
+            <button onClick={onClose} className="p-0.5 md:p-1 hover:bg-gray-100 rounded-full transition-colors"><X size={14} /></button>
         </div>
     )
 });
@@ -231,46 +102,44 @@ const AboutModal = memo(({ isOpen, onClose }) => {
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 animate-in fade-in duration-200">
            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl flex flex-col relative animate-in zoom-in-95 duration-200">
-             <button onClick={onClose} className="absolute top-3 right-3 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-gray-500" title="Close">
-                <X size={18}/>
-             </button>
-              
+             <button onClick={onClose} className="absolute top-3 right-3 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-gray-500" title="Close"><X size={18}/></button>
+             
              <div className="p-6 md:p-8 space-y-5">
+                {/* Header */}
                 <div className="text-center space-y-2">
-                    <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-200">
-                        <Activity className="text-white" size={20}/>
-                    </div>
-                    <h2 className="text-xl md:text-2xl font-bold text-gray-900">IF Studio - Precision Vector Art Engine for Makers & Fabrication <span className="text-gray-400 text-base md:text-lg font-normal block md:inline">(Insert Fabrication)</span></h2>
-                    <p className="text-xs md:text-sm text-gray-500 max-w-xs mx-auto">Precision Vector Art Engine for Makers & Fabrication</p>
+                    <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-200"><Activity className="text-white" size={20}/></div>
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">IF Studio <span className="text-gray-400 text-base font-normal block mt-1">(Insert Fabrication)</span></h2>
+                    <p className="text-sm text-gray-500 font-medium">Precision Vector Art Engine for Makers & Fabrication</p>
                 </div>
 
+                {/* Description */}
                 <div className="space-y-3 text-xs md:text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
                     <p>Built for makers, designers, and anyone who wants fast visual effects without complicated software. Generate spiral art, halftone patterns, and other experimental styles in just a few steps.</p>
-                    <p className="font-semibold text-emerald-600 bg-emerald-50 p-2 rounded-lg text-center">All downloads are free for both personal and commercial use.</p>
+                    <div className="p-3 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold text-center border border-emerald-100">All downloads are free for both personal and commercial use.</div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3">
-                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2 text-xs md:text-sm"><Settings size={14} className="text-blue-500"/> What this platform offers</h3>
-                        <ul className="text-[10px] md:text-xs text-gray-500 space-y-1 list-disc list-inside">
-                            <li>Clean, high-quality outputs</li>
-                            <li>Adjustable density, contrast, and styling controls</li>
-                            <li>Ready-to-use files for laser cutting, CNC routing, vinyl work, print, and 3D printing</li>
-                            <li>Works directly in your browser, no signup required</li>
-                        </ul>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-                        <h3 className="font-bold text-gray-900 mb-2 flex items-center gap-2 text-xs md:text-sm"><Hand size={14} className="text-purple-500"/> Who it’s for</h3>
-                        <p className="text-[10px] md:text-xs text-gray-500 leading-relaxed">People who enjoy creating. Whether you're running a workshop, crafting at home, or experimenting with digital art, IF Studio keeps the process simple.</p>
-                    </div>
+                {/* What it offers */}
+                <div className="space-y-2">
+                    <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2"><Settings size={14} className="text-blue-500"/> What this platform offers</h3>
+                    <ul className="text-xs text-gray-600 space-y-1.5 list-disc pl-4 marker:text-blue-300">
+                        <li>Clean, high-quality outputs</li>
+                        <li>Adjustable density, contrast, and styling controls</li>
+                        <li>Ready-to-use files for laser cutting, CNC routing, vinyl work, print, and 3D printing</li>
+                        <li>Works directly in your browser, no signup required</li>
+                    </ul>
                 </div>
 
-                <div className="text-[10px] md:text-xs text-gray-400 pt-4 border-t border-gray-100 text-center space-y-1">
-                    <p>Designed and maintained by IF Studio as an independent creative project.</p>
-                    <p>Every feature is built with the goal of helping makers turn ideas into visuals quickly.</p>
-                    <div className="pt-2">
-                          <p className="font-bold text-blue-600">Contact: insertfabrication@gmail.com</p>
-                    </div>
+                {/* Who it's for */}
+                <div className="space-y-2">
+                    <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2"><Hand size={14} className="text-purple-500"/> Who it’s for</h3>
+                    <p className="text-xs text-gray-600 leading-relaxed">People who enjoy creating. Whether you're running a workshop, crafting at home, or experimenting with digital art, IF Studio keeps the process simple.</p>
+                </div>
+
+                {/* Footer / Contact */}
+                <div className="pt-4 border-t border-gray-100 text-center space-y-1">
+                    <p className="text-[10px] text-gray-400">Designed and maintained by IF Studio as an independent creative project.</p>
+                    <p className="text-[10px] text-gray-400">Every feature is built with the goal of helping makers turn ideas into visuals quickly.</p>
+                    <a href="mailto:insertfabrication@gmail.com" className="text-xs font-bold text-blue-600 hover:underline block mt-2">Contact: insertfabrication@gmail.com</a>
                 </div>
              </div>
            </div>
@@ -278,258 +147,134 @@ const AboutModal = memo(({ isOpen, onClose }) => {
     )
 });
 
-// --- Helper Functions ---
 const hexToRgb = (hex) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16),
-    g: parseInt(result[2], 16),
-    b: parseInt(result[3], 16)
-  } : { r: 0, g: 0, b: 0 };
+  return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : { r: 0, g: 0, b: 0 };
 };
 
 // --- Main Application ---
-
 export default function App() {
-  // --- State ---
   const [imageSrc, setImageSrc] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [toast, setToast] = useState({ message: null, type: 'info' });
-  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showAbout, setShowAbout] = useState(false);
-  const [isDragOver, setIsDragOver] = useState(false); // New state for drag visual
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   
-  // NEW: Drawer Height State for Mobile
-  // Default to ~40% of screen height in pixels
+  // Mobile UI
   const [drawerHeight, setDrawerHeight] = useState(typeof window !== 'undefined' ? window.innerHeight * 0.4 : 300); 
   const isResizingDrawer = useRef(false);
   const drawerStartY = useRef(0);
   const drawerStartHeight = useRef(0);
 
-  // Mobile Navigation State
   const [activeTab, setActiveTab] = useState('pattern'); 
-  const [activeCropTab, setActiveCropTab] = useState(null); // 'shape'
-
-  // Workflow State
+  const [activeCropTab, setActiveCropTab] = useState(null); 
   const [step, setStep] = useState('upload'); 
     
-  // App Config (Final Values used for pattern generation)
+  // App Config
   const [mode, setMode] = useState('spiral'); 
-  // frameShape now tracks the CROP TYPE: 'circle', 'square', 'custom'
   const [frameShape, setFrameShape] = useState('circle'); 
   const [compareMode, setCompareMode] = useState(false); 
-  
-  // NEW: Lithophane Preview Toggle (Global)
   const [lithoPreview, setLithoPreview] = useState(false);
-    
-  // NEW: Edit Mode View State (Zoom/Pan Inspection)
   const [editView, setEditView] = useState({ scale: 1, x: 0, y: 0 });
-  const lastPinchDist = useRef(null); // For pinch-to-zoom
+  const lastPinchDist = useRef(null); 
 
-  // Pattern Mode Settings
+  // Settings
   const [modeSettings, setModeSettings] = useState({
       spiral: DEFAULT_PATTERN_SETTINGS,
       lines:  DEFAULT_PATTERN_SETTINGS,
       dots:   DEFAULT_PATTERN_SETTINGS,
       flow: { ...DEFAULT_PATTERN_SETTINGS, rings: 80, thickness: 0.8 },
-      photo: DEFAULT_PATTERN_SETTINGS, // Added photo to initialization
-      litho: { resolution: 0.5, widthMm: 100, minDepth: 0.8, maxDepth: 3.0 } // 3D Settings
+      photo: DEFAULT_PATTERN_SETTINGS,
+      litho: { resolution: 0.5, widthMm: 100, minDepth: 0.8, maxDepth: 3.0 }
   });
-
-  // NEW: Color Engine State
-  const [colorMode, setColorMode] = useState('mono'); // 'mono' or 'cmyk'
+  const [colorMode, setColorMode] = useState('mono');
   const [activeLayers, setActiveLayers] = useState({ c: true, m: true, y: true, k: true });
   
-  // Dynamic label map for UX clarity
   const labelMap = {
-    spiral: { 
-        density: "Rings", 
-        thickness: "Stroke Width", 
-        densityTooltip: "Number of continuous rings (controls spatial frequency). Higher = denser pattern.",
-        thicknessTooltip: "Controls the thickness/duty cycle of the line. Higher = darker output."
-    },
-    lines: { 
-        density: "Lines/mm", 
-        thickness: "Line Width", 
-        densityTooltip: "Number of parallel lines (controls spatial frequency). Higher = denser pattern.",
-        thicknessTooltip: "Controls the thickness/duty cycle of the line. Higher = darker output."
-    },
-    dots: { 
-        density: "Grid Density", 
-        thickness: "Dot Scale", 
-        densityTooltip: "Controls the spacing of the dot grid. Higher = smaller spacing.",
-        thicknessTooltip: "Controls the maximum size (scale) of the dots in the lightest areas."
-    },
-    flow: {
-        density: "Stroke Density",
-        thickness: "Stroke Length",
-        densityTooltip: "Controls the spacing between the contour strokes.",
-        thicknessTooltip: "Controls the length of the flow lines relative to the grid."
-    },
-    photo: {
-        density: "NA",
-        thickness: "NA",
-        densityTooltip: "Photo mode passes the image through directly.",
-        thicknessTooltip: "Pass-through mode."
-    }
+    spiral: { density: "Rings", thickness: "Stroke Width", densityTooltip: "Number of continuous rings.", thicknessTooltip: "Controls thickness." },
+    lines: { density: "Lines/mm", thickness: "Line Width", densityTooltip: "Number of parallel lines.", thicknessTooltip: "Controls thickness." },
+    dots: { density: "Grid Density", thickness: "Dot Scale", densityTooltip: "Spacing of grid.", thicknessTooltip: "Max size of dots." },
+    flow: { density: "Stroke Density", thickness: "Stroke Length", densityTooltip: "Spacing between strokes.", thicknessTooltip: "Length of flow lines." },
+    photo: { density: "NA", thickness: "NA", densityTooltip: "Pass-through.", thicknessTooltip: "Pass-through." }
   };
   const currentLabels = labelMap[mode] || labelMap.spiral;
 
-
-  // Getters for Pattern Settings
-  const rings = modeSettings[mode]?.rings || 60; // Safe access
+  const rings = modeSettings[mode]?.rings || 60;
   const lineThickness = modeSettings[mode]?.thickness || 0.5;
   const rotation = modeSettings[mode]?.rotation || 0;
   const dotShape = modeSettings[mode]?.dotShape || 'circle';
 
-  // Memoized Update Handlers
   const updateSetting = useCallback((key, value) => {
-      // If updating Litho specific settings
-      if (['widthMm', 'minDepth', 'maxDepth', 'resolution'].includes(key)) {
-          setModeSettings(prev => ({
-              ...prev,
-              litho: { ...prev.litho, [key]: value }
-          }));
-      } else {
-          setModeSettings(prev => ({
-              ...prev,
-              [mode]: { ...prev[mode], [key]: value }
-          }));
-      }
+      if (['widthMm', 'minDepth', 'maxDepth', 'resolution'].includes(key)) setModeSettings(prev => ({ ...prev, litho: { ...prev.litho, [key]: value } }));
+      else setModeSettings(prev => ({ ...prev, [mode]: { ...prev[mode], [key]: value } }));
   }, [mode]);
 
-  // NEW: Randomize Settings Function
   const randomizeSettings = useCallback(() => {
-      // Randomize basic params
       const rRings = 20 + Math.floor(Math.random() * 80);
       const rThick = 0.2 + Math.random() * 1.0;
       const rRot = Math.floor(Math.random() * 180);
-      
-      // Randomize modes occasionally
       const modes = ['spiral', 'lines', 'dots', 'flow'];
       const rMode = modes[Math.floor(Math.random() * modes.length)];
-
       setMode(rMode);
-      
-      setModeSettings(prev => ({
-          ...prev,
-          [rMode]: { 
-              ...prev[rMode], 
-              rings: rRings, 
-              thickness: rThick, 
-              rotation: rRot 
-          }
-      }));
-      
-      // Randomize dot shape if dots
-      if (rMode === 'dots') {
-          const shapes = ['circle', 'square', 'diamond', 'triangle'];
-          const rShape = shapes[Math.floor(Math.random() * shapes.length)];
-          setModeSettings(prev => ({ ...prev, dots: { ...prev.dots, dotShape: rShape } }));
-      }
-
+      setModeSettings(prev => ({ ...prev, [rMode]: { ...prev[rMode], rings: rRings, thickness: rThick, rotation: rRot } }));
       showToast("Randomized Settings!", 'success');
   }, []);
     
-  // 3D Print Settings
   const [is3DMode, setIs3DMode] = useState(false);
-  const [minThickness, setMinThickness] = useState(DEFAULT_MIN_THICKNESS); // Default 0.32mm
+  const [minThickness, setMinThickness] = useState(DEFAULT_MIN_THICKNESS);
     
-  // Physics (Layout - FINAL Values)
   const [scale, setScale] = useState(1); 
   const [panX, setPanX] = useState(50); 
   const [panY, setPanY] = useState(50); 
   const [centerHole, setCenterHole] = useState(0); 
-  
-  // Border/Ring Thickness State (0-10)
   const [borderWidth, setBorderWidth] = useState(0);
     
-  // Live Crop State (Used only during step='crop' for responsive feedback)
   const [liveCrop, setLiveCrop] = useState({ scale: 1, panX: 50, panY: 50, frameShape: 'circle' });
-    
-  // Custom Aspect Ratio States
-  const [cropAspectW, setCropAspectW] = useState(16); // Default 16:9 for Custom
-  const [cropAspectH, setCropAspectH] = useState(9); // Default 16:9 for Custom
+  const [cropAspectW, setCropAspectW] = useState(16);
+  const [cropAspectH, setCropAspectH] = useState(9);
 
-  // Image Prep
   const [contrast, setContrast] = useState(1.0);
   const [brightness, setBrightness] = useState(0);
   const [invert, setInvert] = useState(false);
-    
-  // Colors
   const [fgColor, setFgColor] = useState('#000000');
-  const bgColor = '#ffffff';
 
-  // Drag
-  const [isDragging, setIsDragging] = useState(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
-
-  // Refs
   const canvasRef = useRef(null);
   const sourceImageRef = useRef(null);
   const containerRef = useRef(null);
   const helperCanvasRef = useRef(null);
   const renderTimeoutRef = useRef(null);
 
-  // --- Actions ---
-  useEffect(() => {
-      if (window.innerWidth < 768) {
-          setSidebarOpen(false);
-          setActiveTab(null); 
-      }
-  }, []);
-
   const showToast = (msg, type = 'info') => {
       setToast({ message: msg, type });
-      if (type !== 'error') {
-          setTimeout(() => setToast({ message: null, type: 'info' }), 3000);
-      }
+      if (type !== 'error') setTimeout(() => setToast({ message: null, type: 'info' }), 3000);
   };
 
-  // Function to handle sharing (for desktop button)
   const handleShare = () => {
-    // FIX: Simplified title property for native sharing.
-    const shareData = {
-        title: 'IF Studio: Vector Art Generator', 
-        text: 'Convert your photos into vector art, spiral, halftone, and dot patterns for fabrication and design—free and in your browser!',
-        url: window.location.href,
-    };
-
-    if (navigator.share) {
-        navigator.share(shareData).catch((error) => console.log('Error sharing', error));
-    } else {
-        // Fallback for desktop browsers
-        const tempInput = document.createElement('input');
-        tempInput.value = window.location.href;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
-        showToast("Link copied to clipboard!", 'info');
-    }
+    const shareData = { title: 'IF Studio', text: 'Vector Art Generator', url: window.location.href };
+    if (navigator.share) navigator.share(shareData).catch((e) => console.log(e));
+    else { navigator.clipboard.writeText(window.location.href); showToast("Link copied!", 'info'); }
   };
 
   const resetView = useCallback(() => {
-      // Reset Final States
       setScale(1); setPanX(50); setPanY(50); setCenterHole(0);
-      // Reset Live Crop States
       setLiveCrop({ scale: 1, panX: 50, panY: 50, frameShape: 'circle' });
-      // Reset Custom Aspect Ratio Inputs
-      setCropAspectW(16); setCropAspectH(9);
-      setFrameShape('circle'); // Reset final frame shape
-      // Reset Edit View
+      setCropAspectW(16); setCropAspectH(9); setFrameShape('circle');
       setEditView({ scale: 1, x: 0, y: 0 });
       showToast("View Reset");
   }, []);
 
+  const handleFitToScreen = useCallback(() => {
+      setEditView({ scale: 1, x: 0, y: 0 });
+      showToast("Fit to Screen");
+  }, []);
+
   const resetPatternSettings = useCallback(() => {
       if (activeTab === 'litho') {
-          updateSetting('widthMm', 100);
-          updateSetting('minDepth', 0.8);
-          updateSetting('maxDepth', 3.0);
-          updateSetting('resolution', 0.5);
-          showToast("Litho Reset");
-          return;
+          updateSetting('widthMm', 100); updateSetting('minDepth', 0.8);
+          updateSetting('maxDepth', 3.0); updateSetting('resolution', 0.5);
+          showToast("Litho Reset"); return;
       }
       updateSetting('rings', DEFAULT_PATTERN_SETTINGS.rings);
       updateSetting('thickness', DEFAULT_PATTERN_SETTINGS.thickness);
@@ -538,135 +283,57 @@ export default function App() {
       showToast("Pattern Reset");
   }, [activeTab, mode, updateSetting]);
 
-  // Individual reset handler for sliders
-  const handleSliderReset = useCallback((settingKey, defaultValue) => {
-    if (['rings', 'thickness', 'rotation'].includes(settingKey)) {
-        updateSetting(settingKey, defaultValue);
-        showToast(`${settingKey} reset to default.`);
-    } else if (settingKey === 'minThickness') {
-        setMinThickness(DEFAULT_MIN_THICKNESS);
-        showToast(`Min Thickness reset to ${DEFAULT_MIN_THICKNESS}mm.`);
-    } else if (settingKey === 'centerHole') {
-        setCenterHole(0);
-        showToast(`Center Hole reset.`);
-    } else if (settingKey === 'contrast') {
-        setContrast(1.0);
-        showToast(`Contrast reset.`);
-    } else if (settingKey === 'brightness') {
-        setBrightness(0);
-        showToast(`Brightness reset.`);
-    } else if (settingKey === 'borderWidth') {
-        setBorderWidth(0);
-        showToast(`Border reset.`);
-    } else if (['widthMm', 'minDepth', 'maxDepth', 'resolution'].includes(settingKey)) {
-          // Litho Resets
-          if (settingKey === 'widthMm') updateSetting('widthMm', 100);
-          if (settingKey === 'minDepth') updateSetting('minDepth', 0.8);
-          if (settingKey === 'maxDepth') updateSetting('maxDepth', 3.0);
-          if (settingKey === 'resolution') updateSetting('resolution', 0.5);
-          showToast(`${settingKey} reset.`);
-    }
+  const handleSliderReset = useCallback((key, def) => {
+    if (key === 'minThickness') setMinThickness(DEFAULT_MIN_THICKNESS);
+    else if (key === 'centerHole') setCenterHole(0);
+    else if (key === 'contrast') setContrast(1.0);
+    else if (key === 'brightness') setBrightness(0);
+    else if (key === 'borderWidth') setBorderWidth(0);
+    else updateSetting(key, def);
+    showToast(`${key} reset.`);
   }, [updateSetting]);
 
-  // Mode Change Handler with Loading Preview
   const handleModeChange = useCallback((newMode) => {
       if (mode === newMode) return;
       setIsProcessing(true);
-      // Small delay to allow UI to render the spinner before the heavy renderFrame task locks the thread
-      setTimeout(() => {
-          setMode(newMode);
-          // Allow some time for the render loop to catch up
-          setTimeout(() => setIsProcessing(false), 500); 
-      }, 50);
+      setTimeout(() => { setMode(newMode); setTimeout(() => setIsProcessing(false), 500); }, 50);
   }, [mode]);
     
-  // --- UPDATED: Guarded Click Handler ---
-  const handleMobileTabClick = (tab) => {
-      if (!imageSrc) {
-          // No functionality until image is uploaded
-          return;
-      }
-      
-      // FIX: Persistent Drawer on Mobile
-      // Removed toggle logic to prevent accidental closing
-      setActiveTab(tab); 
-  };
-    
-  const handleMobileCropTabClick = (tab) => {
-    setActiveCropTab(prev => prev === tab ? null : tab);
-  };
-
-
-  const handleCanvasClick = () => {
-      // Closes mobile menu only if not in crop mode (where drag/pan is active)
-      if (step === 'crop') return;
-      
-      // FIX: Disable auto-close on mobile when clicking canvas
-      // if (window.innerWidth < 768) {
-      //    setActiveTab(null); 
-      // }
-  };
+  const handleMobileTabClick = (tab) => { if (imageSrc) setActiveTab(prev => prev === tab ? null : tab); };
+  const handleMobileCropTabClick = (tab) => setActiveCropTab(prev => prev === tab ? null : tab);
 
   const handleDoubleClick = () => {
       if (imageSrc && step === 'edit') {
-          // Sync current FINAL state to LIVE state before entering crop mode
           setLiveCrop({ scale, panX, panY, frameShape });
-          setStep('crop');
-          setActiveCropTab('shape'); // Automatically open a tab to start cropping
-          showToast("Editing Crop...");
+          setStep('crop'); setActiveCropTab('shape'); showToast("Editing Crop...");
       }
   };
 
-  const handleImageUpload = useCallback((e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    processFile(file);
-  }, []);
+  const handleImageUpload = useCallback((e) => { const file = e.target.files?.[0]; if (file) processFile(file); }, []);
 
-  // --- NEW: Centralized File Processor for Drag & Drop ---
   const processFile = (file) => {
-    if (!file.type.startsWith('image/')) {
-        showToast("Invalid file type. JPG/PNG only.", 'error');
-        return;
-    }
-
+    if (!file.type.startsWith('image/')) { showToast("Invalid file. JPG/PNG only.", 'error'); return; }
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
       img.onload = () => {
-        // --- OPTIMIZATION: Downscale large images ---
-        // Prevents browser crashes on massive 40MB+ photos
-        let width = img.width;
-        let height = img.height;
+        let width = img.width, height = img.height;
         let srcToUse = img.src;
-
         if (width > MAX_IMPORT_RESOLUTION || height > MAX_IMPORT_RESOLUTION) {
             const scaleFactor = Math.min(MAX_IMPORT_RESOLUTION / width, MAX_IMPORT_RESOLUTION / height);
-            const w = Math.floor(width * scaleFactor);
-            const h = Math.floor(height * scaleFactor);
-            
+            const w = Math.floor(width * scaleFactor), h = Math.floor(height * scaleFactor);
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = w;
-            tempCanvas.height = h;
+            tempCanvas.width = w; tempCanvas.height = h;
             const ctx = tempCanvas.getContext('2d');
             ctx.drawImage(img, 0, 0, w, h);
-            
             srcToUse = tempCanvas.toDataURL('image/jpeg', 0.95);
-            // Create new optimized image object
             const optimizedImg = new Image();
-            optimizedImg.onload = () => {
-                sourceImageRef.current = optimizedImg;
-                setImageSrc(srcToUse);
-                finishUpload();
-            }
+            optimizedImg.onload = () => { sourceImageRef.current = optimizedImg; setImageSrc(srcToUse); finishUpload(); }
             optimizedImg.src = srcToUse;
         } else {
-            sourceImageRef.current = img;
-            setImageSrc(event.target.result);
-            finishUpload();
+            sourceImageRef.current = img; setImageSrc(event.target.result); finishUpload();
         }
       };
-      img.onerror = () => showToast("Failed to process image.", 'error');
       img.src = event.target.result;
     };
     reader.readAsDataURL(file);
@@ -674,55 +341,27 @@ export default function App() {
 
   const finishUpload = () => {
     resetView();
-    setLiveCrop({ scale: 1, panX: 50, panY: 50, frameShape: 'circle' }); // Initialize live crop
-    setStep('crop'); 
-    setActiveCropTab('shape'); // Automatically open crop controls
+    setLiveCrop({ scale: 1, panX: 50, panY: 50, frameShape: 'circle' });
+    setStep('crop'); setActiveCropTab('shape');
     if (window.innerWidth < 768) setActiveTab(null);
   };
 
-  // --- NEW: Mobile Drawer Resizing Logic ---
-  const handleDrawerDragStart = (e) => {
-    isResizingDrawer.current = true;
-    drawerStartY.current = e.touches[0].clientY;
-    drawerStartHeight.current = drawerHeight;
-  };
-
+  const handleDrawerDragStart = (e) => { isResizingDrawer.current = true; drawerStartY.current = e.touches[0].clientY; drawerStartHeight.current = drawerHeight; };
   const handleDrawerDragMove = (e) => {
     if (!isResizingDrawer.current) return;
-    const currentY = e.touches[0].clientY;
-    // Moving finger UP (smaller Y) means height increases
-    const deltaY = drawerStartY.current - currentY; 
-    
-    const newHeight = Math.min(
-        window.innerHeight * 0.85, 
-        Math.max(window.innerHeight * 0.2, drawerStartHeight.current + deltaY)
-    );
-    setDrawerHeight(newHeight);
+    const deltaY = drawerStartY.current - e.touches[0].clientY; 
+    setDrawerHeight(Math.min(window.innerHeight * 0.85, Math.max(150, drawerStartHeight.current + deltaY)));
   };
+  const handleDrawerDragEnd = () => { isResizingDrawer.current = false; };
 
-  const handleDrawerDragEnd = () => {
-    isResizingDrawer.current = false;
-  };
-
-  // --- Drag Handling (Updates Live Crop State OR Edit View) ---
   const handleStart = (e) => {
     if (!imageSrc) return;
-    
-    // FIX: Pinch detection
     if (e.touches && e.touches.length === 2) {
-        setIsDragging(false); // Cancel pan if it was active
-        const dist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
-        lastPinchDist.current = dist;
+        setIsDragging(false);
+        lastPinchDist.current = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         return;
     }
-
-    if (step !== 'crop' && step !== 'edit') {
-        handleCanvasClick(); 
-        return; 
-    }
+    if (step !== 'crop' && step !== 'edit') { if(window.innerWidth < 768 && activeTab) setActiveTab(null); return; }
     setIsDragging(true);
     const pos = e.touches ? e.touches[0] : e;
     lastMousePos.current = { x: pos.clientX, y: pos.clientY };
@@ -730,28 +369,16 @@ export default function App() {
 
   const handleMove = (e) => {
     if (!imageSrc) return;
-
-    // FIX: Handle Pinch Zoom
     if (e.touches && e.touches.length === 2 && step === 'edit') {
-        const dist = Math.hypot(
-            e.touches[0].clientX - e.touches[1].clientX,
-            e.touches[0].clientY - e.touches[1].clientY
-        );
+        const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         if (lastPinchDist.current) {
             const diff = dist - lastPinchDist.current;
-            const scaleDelta = diff * 0.005; // Sensitivity
-            setEditView(prev => ({
-                ...prev,
-                scale: Math.min(5, Math.max(0.5, prev.scale + scaleDelta))
-            }));
+            setEditView(prev => ({ ...prev, scale: Math.min(5, Math.max(0.5, prev.scale + diff * 0.005)) }));
         }
         lastPinchDist.current = dist;
         return; 
     }
-
     if (!isDragging) return;
-    if (step !== 'crop' && step !== 'edit') return;
-
     const pos = e.touches ? e.touches[0] : e;
     const deltaX = pos.clientX - lastMousePos.current.x;
     const deltaY = pos.clientY - lastMousePos.current.y;
@@ -759,379 +386,198 @@ export default function App() {
     const sensitivity = e.touches ? 0.25 : 0.15;
     
     if (step === 'crop') {
-        setLiveCrop(prev => ({
-            ...prev,
-            panX: Math.min(100, Math.max(0, prev.panX + deltaX * sensitivity)),
-            panY: Math.min(100, Math.max(0, prev.panY + deltaY * sensitivity))
-        }));
+        setLiveCrop(prev => ({ ...prev, panX: Math.min(100, Math.max(0, prev.panX + deltaX * sensitivity)), panY: Math.min(100, Math.max(0, prev.panY + deltaY * sensitivity)) }));
     } else if (step === 'edit') {
-        // NON-DESTRUCTIVE INSPECTION PAN
-        setEditView(prev => ({
-            ...prev,
-            x: prev.x + deltaX,
-            y: prev.y + deltaY
-        }));
+        setEditView(prev => ({ ...prev, x: prev.x + deltaX, y: prev.y + deltaY }));
     }
   };
 
-  // --- Wheel Event Listener for Non-Passive Zoom ---
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-
     const onWheel = (e) => {
-        if (step === 'edit') {
-            e.preventDefault();
-            const scaleDelta = e.deltaY * -0.001;
-            setEditView(prev => ({
-                ...prev,
-                scale: Math.min(5, Math.max(0.5, prev.scale + scaleDelta))
-            }));
-        }
+        if (step === 'edit') { e.preventDefault(); const scaleDelta = e.deltaY * -0.001; setEditView(prev => ({ ...prev, scale: Math.min(5, Math.max(0.5, prev.scale + scaleDelta)) })); }
     };
-    
-    // Non-passive listener to allow preventDefault
     container.addEventListener('wheel', onWheel, { passive: false });
     return () => container.removeEventListener('wheel', onWheel);
-  }, [step]); // Re-binds when step changes.
+  }, [step]);
 
-  const handleEnd = () => {
-      setIsDragging(false);
-      lastPinchDist.current = null; // Reset pinch
-  };
+  const handleEnd = () => { setIsDragging(false); lastPinchDist.current = null; };
+  const onDragOver = (e) => { e.preventDefault(); setIsDragOver(true); };
+  const onDragLeave = (e) => { e.preventDefault(); setIsDragOver(false); };
+  const onDrop = (e) => { e.preventDefault(); setIsDragOver(false); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); };
 
-  const handleTouchStart = (e) => {
-      if (!imageSrc) return;
-      handleStart(e);
-  };
-
-  // --- NEW: Global Drag & Drop Handlers ---
-  const onDragOver = (e) => {
-      e.preventDefault();
-      setIsDragOver(true);
-  };
-  
-  const onDragLeave = (e) => {
-      e.preventDefault();
-      setIsDragOver(false);
-  };
-  
-  const onDrop = (e) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      const file = e.dataTransfer.files[0];
-      if (file) processFile(file);
-  };
-
-  // --- Render Core ---
-  const renderFrame = (ctx, targetW, targetH, isExport = false) => {
+  const renderFrame = useCallback((ctx, targetW, targetH, isExport = false) => {
     try {
         const img = sourceImageRef.current;
         if (!img) return;
         
-        // --- Determine Current Frame Properties ---
         const currentScale = step === 'crop' ? liveCrop.scale : scale;
         const currentPanX = step === 'crop' ? liveCrop.panX : panX;
         const currentPanY = step === 'crop' ? liveCrop.panY : panY;
         const currentFrameShape = step === 'crop' ? liveCrop.frameShape : frameShape;
-
-        // Determine aspect ratio
+        const w = targetW, h = targetH;
         let currentAspect = 1.0;
-        if (currentFrameShape === 'custom') {
-            currentAspect = cropAspectW / cropAspectH;
-        } else if (currentFrameShape === 'square') {
-            currentAspect = 1.0;
-        }
+        if (currentFrameShape === 'custom') currentAspect = cropAspectW / cropAspectH;
+        else if (currentFrameShape === 'square') currentAspect = 1.0;
 
-        const nativeSize = Math.min(img.width, img.height);
-        const w = targetW;
-        const h = targetH;
-        
-        // --- 1. PREPARE HELPER CANVAS (Raw Pixel Data) ---
-        if (!helperCanvasRef.current) helperCanvasRef.current = document.createElement('canvas');
-        const tempCanvas = helperCanvasRef.current;
-        if (tempCanvas.width !== w || tempCanvas.height !== h) { tempCanvas.width = w; tempCanvas.height = h; }
-        const tCtx = tempCanvas.getContext('2d', { willReadFrequently: true }); // Optimized readback
-        
-        // --- FIX: Robust Object-Contain Logic ---
         const imgAspect = img.width / img.height;
         const containerAspect = w / h;
-        
         let drawW, drawH;
-        
-        if (imgAspect > containerAspect) {
-            drawW = w * currentScale;
-            drawH = drawW / imgAspect;
-        } else {
-            drawH = h * currentScale;
-            drawW = drawH * imgAspect;
-        }
+        if (imgAspect > containerAspect) { drawW = w * currentScale; drawH = drawW / imgAspect; } 
+        else { drawH = h * currentScale; drawW = drawH * imgAspect; }
 
         const shiftX = ((currentPanX - 50) / 100) * w * 2;
         const shiftY = ((currentPanY - 50) / 100) * h * 2;
-        const centerX = w / 2;
-        const centerY = h / 2;
+        const centerX = w / 2, centerY = h / 2;
         const drawX = centerX - (drawW / 2) + shiftX;
         const drawY = centerY - (drawH / 2) + shiftY;
 
+        if (!helperCanvasRef.current) helperCanvasRef.current = document.createElement('canvas');
+        const tempCanvas = helperCanvasRef.current;
+        if (tempCanvas.width !== w || tempCanvas.height !== h) { tempCanvas.width = w; tempCanvas.height = h; }
+        const tCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
         tCtx.save();
         tCtx.imageSmoothingEnabled = isExport ? true : !isDragging;
-        tCtx.imageSmoothingQuality = isExport ? 'high' : (isDragging ? 'low' : 'medium');
+        tCtx.imageSmoothingQuality = isExport ? 'high' : 'medium';
         tCtx.clearRect(0, 0, w, h);
         tCtx.drawImage(img, drawX, drawY, drawW, drawH);
         tCtx.restore();
 
-        // --- 2. CROP VISUALIZATION (Direct to Context, skip heavy logic) ---
         const maxCropDim = Math.min(w, h);
         let cropW, cropH, cropX, cropY;
-
         if (currentFrameShape === 'circle' || currentFrameShape === 'square') {
-            cropW = maxCropDim;
-            cropH = maxCropDim;
-            cropX = centerX - cropW / 2;
-            cropY = centerY - cropH / 2;
-        } else { // 'custom'
+            cropW = maxCropDim; cropH = maxCropDim;
+            cropX = centerX - cropW / 2; cropY = centerY - cropH / 2;
+        } else { 
             const baseDim = maxCropDim;
-            if (currentAspect >= 1) { 
-                cropW = baseDim;
-                cropH = baseDim / currentAspect;
-            } else { 
-                cropH = baseDim;
-                cropW = baseDim * currentAspect;
-            }
-            cropX = centerX - cropW / 2;
-            cropY = centerY - cropH / 2;
+            if (currentAspect >= 1) { cropW = baseDim; cropH = baseDim / currentAspect; } 
+            else { cropH = baseDim; cropW = baseDim * currentAspect; }
+            cropX = centerX - cropW / 2; cropY = centerY - cropH / 2;
         }
 
         if (step === 'crop') {
-            // Draw original image from temp canvas
             ctx.clearRect(0, 0, w, h);
             ctx.drawImage(tempCanvas, 0, 0);
-            
-            // Draw Mask
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; 
-            ctx.beginPath();
-            ctx.rect(0, 0, w, h); 
-            
-            if (currentFrameShape === 'circle') {
-                ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2, true);
-            } else { 
-                ctx.rect(cropX, cropY, cropW, cropH);
-            }
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'; ctx.beginPath(); ctx.rect(0, 0, w, h); 
+            if (currentFrameShape === 'circle') ctx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2, true);
+            else ctx.rect(cropX, cropY, cropW, cropH);
             ctx.fill('evenodd'); 
-            
-            // Draw border
-            ctx.strokeStyle = THEME_COLOR;
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            if (currentFrameShape === 'circle') {
-                ctx.arc(centerX, centerY, maxCropDim / 2 - 1, 0, Math.PI * 2);
-            } else {
-                ctx.rect(cropX + 1, cropY + 1, cropW - 2, cropH - 2);
-            }
+            ctx.strokeStyle = THEME_COLOR; ctx.lineWidth = 2; ctx.beginPath();
+            if (currentFrameShape === 'circle') ctx.arc(centerX, centerY, maxCropDim / 2 - 1, 0, Math.PI * 2);
+            else ctx.rect(cropX + 1, cropY + 1, cropW - 2, cropH - 2);
             ctx.stroke();
             return; 
         }
 
-        // --- 3. PATTERN GENERATION (Edit Mode) ---
-        
-        // --- COMPARE MODE: Show Original Image ---
-        // Need to respect Edit View transform here too if we want "pan/zoom" to work on compare
-        // But Compare is usually strictly "Final Output Preview".
-        
-        // We need a separate canvas to hold the *generated* pattern so we can scale it.
         const outputCanvas = document.createElement('canvas');
         outputCanvas.width = w; outputCanvas.height = h;
-        const oCtx = outputCanvas.getContext('2d');
+        const oCtx = outputCanvas.getContext('2d', { willReadFrequently: true });
 
-        // Fill background based on shape
-        oCtx.fillStyle = '#FFFFFF';
-        oCtx.beginPath();
-        if (currentFrameShape === 'circle') {
-            oCtx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
-        } else {
-            oCtx.rect(cropX, cropY, cropW, cropH);
-        }
+        oCtx.fillStyle = '#FFFFFF'; oCtx.beginPath();
+        if (currentFrameShape === 'circle') oCtx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
+        else oCtx.rect(cropX, cropY, cropW, cropH);
         oCtx.fill();
 
         if (compareMode && !isExport) {
-            oCtx.save();
-            oCtx.beginPath();
-            if (currentFrameShape === 'circle') {
-                oCtx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
-            } else {
-                oCtx.rect(cropX, cropY, cropW, cropH);
-            }
-            oCtx.clip();
-            oCtx.drawImage(tempCanvas, 0, 0);
-            oCtx.restore();
+            oCtx.save(); oCtx.beginPath();
+            if (currentFrameShape === 'circle') oCtx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
+            else oCtx.rect(cropX, cropY, cropW, cropH);
+            oCtx.clip(); oCtx.drawImage(tempCanvas, 0, 0); oCtx.restore();
         } else {
-             // --- EXPLICIT WHITE BACKGROUND WITH CLIPPING ---
-             // Already done above
-             
-             // --- Pattern Generation Masking ---
-             // 1. Draw Image Data onto Pattern Context
              const sourceData = tCtx.getImageData(0, 0, w, h).data;
-     
-             const PI = Math.PI;
-             const PI2 = Math.PI * 2;
+             const PI = Math.PI, PI2 = Math.PI * 2;
              const effectiveRings = Math.max(1, rings || 60); 
-             
-             const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
+             const maxRadiusSq = (maxCropDim/2) ** 2;
              const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
              const pxPerMm = w / 200; 
              const minFeaturePx = is3DMode ? (minThickness * pxPerMm) : 0;
-     
+             const halfCropW = cropW / 2, halfCropH = cropH / 2;
+
              let layersToRender = [];
-             if (mode === 'photo') {
-                 layersToRender.push({ key: 'photo', color: hexToRgb(fgColor), angleOffset: 0 });
-             } else if (colorMode === 'cmyk') {
+             if (mode === 'photo') layersToRender.push({ key: 'photo', color: hexToRgb(fgColor), angleOffset: 0 });
+             else if (colorMode === 'cmyk') {
                  if (activeLayers.c) layersToRender.push({ key: 'c', color: CMYK_COLORS.c, angleOffset: CMYK_ANGLES.c });
                  if (activeLayers.m) layersToRender.push({ key: 'm', color: CMYK_COLORS.m, angleOffset: CMYK_ANGLES.m });
                  if (activeLayers.y) layersToRender.push({ key: 'y', color: CMYK_COLORS.y, angleOffset: CMYK_ANGLES.y });
                  if (activeLayers.k) layersToRender.push({ key: 'k', color: CMYK_COLORS.k, angleOffset: CMYK_ANGLES.k });
-             } else {
-                 layersToRender.push({ key: 'mono', color: hexToRgb(fgColor), angleOffset: 0 }); 
-             }
-             
-             const halfCropW = cropW / 2; 
-             const halfCropH = cropH / 2;
-     
+             } else layersToRender.push({ key: 'mono', color: hexToRgb(fgColor), angleOffset: 0 }); 
+
              layersToRender.forEach((layer, i) => {
                  const isMono = layer.key === 'mono' || layer.key === 'photo'; 
                  const layerColor = isMono ? layer.color : hexToRgb(layer.color); 
                  const totalRotation = rotation + layer.angleOffset;
                  const radRotation = (totalRotation * PI) / 180;
-     
                  const layerImgData = oCtx.createImageData(w, h);
                  const data = layerImgData.data;
                  
-                 // -- Flow Field (Contour) Logic --
                  if (mode === 'flow') {
-                     const gridSize = maxCropDim / effectiveRings; 
-                     const strokeLen = gridSize * (lineThickness * 3.0);
-                     
-                     if (colorMode === 'cmyk' && i > 0) {
-                           oCtx.globalCompositeOperation = 'multiply';
-                     } else {
-                           oCtx.globalCompositeOperation = 'source-over';
-                     }
-                     
-                     oCtx.strokeStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
-                     
-                     let lw = Math.max(1, gridSize * 0.2); 
-                     if (is3DMode && lw < minFeaturePx) lw = minFeaturePx;
-                     oCtx.lineWidth = lw;
-                     
-                     oCtx.beginPath();
-                     // Iterate Grid
-                     for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
-                         for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
-                             const cx = centerX + x;
-                             const cy = centerY + y;
-                             
-                             const dx = cx - centerX; const dy = cy - centerY; const distSq = dx*dx + dy*dy;
-                             if (currentFrameShape === 'circle' && distSq > maxRadiusSq) continue;
-                             if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
-                             if (distSq < holeRadiusSq) continue;
-     
-                             const ix = Math.floor(cx); const iy = Math.floor(cy);
-                             if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
-                             const idx = (iy * w + ix) * 4;
-                             if (sourceData[idx+3] === 0) continue;
-     
-                             const baseIdx = (iy * w + ix) * 4;
-                             let r = sourceData[baseIdx]/255, g = sourceData[baseIdx+1]/255, b = sourceData[baseIdx+2]/255;
-                             const luma = 0.299*r + 0.587*g + 0.114*b;
-                             
-                             // Sobel
-                             const idxR = ((iy)*w + (ix+1))*4;
-                             let rr = sourceData[idxR]/255, gr = sourceData[idxR+1]/255, br = sourceData[idxR+2]/255;
-                             const lumaR = 0.299*rr + 0.587*gr + 0.114*br;
-                             const idxL = ((iy)*w + (ix-1))*4;
-                             let rl = sourceData[idxL]/255, gl = sourceData[idxL+1]/255, bl = sourceData[idxL+2]/255;
-                             const lumaL = 0.299*rl + 0.587*gl + 0.114*bl;
-                             const idxD = ((iy+1)*w + (ix))*4;
-                             let rd = sourceData[idxD]/255, gd = sourceData[idxD+1]/255, bd = sourceData[idxD+2]/255;
-                             const lumaD = 0.299*rd + 0.587*gd + 0.114*bd;
-                             const idxU = ((iy-1)*w + (ix))*4;
-                             let ru = sourceData[idxU]/255, gu = sourceData[idxU+1]/255, bu = sourceData[idxU+2]/255;
-                             const lumaU = 0.299*ru + 0.587*gu + 0.114*bu;
-     
-                             const gx = lumaR - lumaL;
-                             const gy = lumaD - lumaU;
-                             
-                             const angle = Math.atan2(gy, gx) + Math.PI/2;
-                             const val = (luma - 0.5) * contrast + 0.5 + (brightness/255);
-                             
-                             if (val > 0.95 && !invert) continue;
-                             if (val < 0.05 && invert) continue;
-                             
-                             const len = strokeLen;
-                             
-                             const x1 = cx - Math.cos(angle) * len/2;
-                             const y1 = cy - Math.sin(angle) * len/2;
-                             const x2 = cx + Math.cos(angle) * len/2;
-                             const y2 = cy + Math.sin(angle) * len/2;
-                             
-                             oCtx.moveTo(x1, y1);
-                             oCtx.lineTo(x2, y2);
-                         }
-                     }
-                     oCtx.stroke();
-                     oCtx.globalCompositeOperation = 'source-over';
-                     return;
-                 }
-     
-                 // -- Standard Modes Loop --
-                 if (mode !== 'flow') {
+                      const gridSize = maxCropDim / effectiveRings; 
+                      const strokeLen = gridSize * (lineThickness * 3.0);
+                      const flowCanvas = document.createElement('canvas');
+                      flowCanvas.width = w; flowCanvas.height = h;
+                      const fCtx = flowCanvas.getContext('2d');
+                      fCtx.strokeStyle = `rgba(${layerColor.r}, ${layerColor.g}, ${layerColor.b}, 1)`;
+                      let lw = Math.max(1, gridSize * 0.2);
+                      if (is3DMode && lw < minFeaturePx) lw = minFeaturePx;
+                      fCtx.lineWidth = lw;
+                      fCtx.beginPath();
+                      for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
+                          for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
+                              const cx = centerX + x, cy = centerY + y;
+                              const dx = cx - centerX, dy = cy - centerY, distSq = dx*dx + dy*dy;
+                              if (currentFrameShape === 'circle' && distSq > maxRadiusSq) continue;
+                              if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
+                              if (distSq < holeRadiusSq) continue;
+                              const ix = Math.floor(cx), iy = Math.floor(cy);
+                              if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
+                              const idx = (iy * w + ix) * 4;
+                              if (sourceData[idx+3] === 0) continue;
+                              const getL = (idx) => 0.299*(sourceData[idx]/255) + 0.587*(sourceData[idx+1]/255) + 0.114*(sourceData[idx+2]/255);
+                              const luma = getL(idx);
+                              const val = (luma - 0.5) * contrast + 0.5 + (brightness/255);
+                              if ((val > 0.95 && !invert) || (val < 0.05 && invert)) continue;
+                              const gx = getL(((iy)*w + (ix+1))*4) - getL(((iy)*w + (ix-1))*4);
+                              const gy = getL(((iy+1)*w + (ix))*4) - getL(((iy-1)*w + (ix))*4);
+                              const angle = Math.atan2(gy, gx) + Math.PI/2;
+                              const x1 = cx - Math.cos(angle)*strokeLen/2, y1 = cy - Math.sin(angle)*strokeLen/2;
+                              const x2 = cx + Math.cos(angle)*strokeLen/2, y2 = cy + Math.sin(angle)*strokeLen/2;
+                              fCtx.moveTo(x1, y1); fCtx.lineTo(x2, y2);
+                          }
+                      }
+                      fCtx.stroke();
+                      oCtx.drawImage(flowCanvas, 0, 0);
+                 } else {
                      for (let y = 0; y < h; y++) {
                          for (let x = 0; x < w; x++) {
                              const index = (y * w + x) * 4;
                              if (sourceData[index+3] === 0) { data[index+3] = 0; continue; }
-     
-                             const dx = x - centerX; const dy = y - centerY; const distSq = dx*dx + dy*dy;
-     
+                             const dx = x - centerX, dy = y - centerY, distSq = dx*dx + dy*dy;
                              if (currentFrameShape === 'circle' && distSq > maxRadiusSq) { data[index+3] = 0; continue; }
                              if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) { data[index+3] = 0; continue; }
                              if (distSq < holeRadiusSq) { data[index+3] = 0; continue; }
-     
-                             let val = 1.0;
+                             
                              let r = sourceData[index]/255, g = sourceData[index+1]/255, b = sourceData[index+2]/255;
-     
+                             let val = 1.0;
                              if (isMono) {
                                  let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
-                                 luma += brightness;
-                                 luma = (luma - 128) * contrast + 128;
+                                 luma += brightness; luma = (luma - 128) * contrast + 128;
                                  if (luma < 0) luma = 0; if (luma > 255) luma = 255;
                                  val = luma / 255;
                                  if (invert) val = 1.0 - val;
-                                 
-                                 if (mode === 'photo') {
-                                     let displayVal = val * 255;
-                                     data[index] = displayVal; data[index+1] = displayVal; data[index+2] = displayVal; data[index+3] = 255;
-                                     continue; 
-                                 }
+                                 if (mode === 'photo') { data[index] = val*255; data[index+1] = val*255; data[index+2] = val*255; data[index+3] = 255; continue; }
                              } else {
-                                 r = ((r - 0.5) * contrast + 0.5) + (brightness/255);
-                                 g = ((g - 0.5) * contrast + 0.5) + (brightness/255);
-                                 b = ((b - 0.5) * contrast + 0.5) + (brightness/255);
-                                 r = Math.max(0, Math.min(1, r)); g = Math.max(0, Math.min(1, g)); b = Math.max(0, Math.min(1, b));
-     
-                                 let k = 1 - Math.max(r, g, b);
-                                 let c = (1 - r - k) / (1 - k) || 0;
-                                 let m = (1 - g - k) / (1 - k) || 0;
-                                 let y = (1 - b - k) / (1 - k) || 0;
-                                 
-                                 if (layer.key === 'c') val = 1 - c;
-                                 if (layer.key === 'm') val = 1 - m;
-                                 if (layer.key === 'y') val = 1 - y;
-                                 if (layer.key === 'k') val = 1 - k;
+                                r = Math.min(1, Math.max(0, ((r-0.5)*contrast+0.5)+(brightness/255)));
+                                g = Math.min(1, Math.max(0, ((g-0.5)*contrast+0.5)+(brightness/255)));
+                                b = Math.min(1, Math.max(0, ((b-0.5)*contrast+0.5)+(brightness/255)));
+                                let k = 1 - Math.max(r, g, b);
+                                if (layer.key === 'c') val = 1 - ((1 - r - k) / (1 - k) || 0);
+                                if (layer.key === 'm') val = 1 - ((1 - g - k) / (1 - k) || 0);
+                                if (layer.key === 'y') val = 1 - ((1 - b - k) / (1 - k) || 0);
+                                if (layer.key === 'k') val = 1 - k;
                              }
-     
                              let isForeground = false;
-     
-                              if (mode === 'spiral') {
+                             if (mode === 'spiral') {
                                  const dist = Math.sqrt(distSq);
                                  const angle = Math.atan2(dy, dx) + radRotation;
                                  const normDist = dist / (maxCropDim / 2);
@@ -1139,12 +585,8 @@ export default function App() {
                                  const spacingPx = (maxCropDim / 2) / effectiveRings; 
                                  let threshold = (1 - val) * (lineThickness * 2);
                                  if (is3DMode) {
-                                     const minDuty = minFeaturePx / spacingPx;
-                                     if (threshold < minDuty) threshold = minDuty;
-                                 } else {
-                                     const minConn = 0.05; 
-                                     if (threshold < minConn && lineThickness > 0.1) threshold = minConn;
-                                 }
+                                    const minDuty = minFeaturePx / spacingPx; if (threshold < minDuty) threshold = minDuty;
+                                 } else if (threshold < 0.05 && lineThickness > 0.1) threshold = 0.05;
                                  if ((wave + 1) / 2 < threshold) isForeground = true;
                              } else if (mode === 'lines') {
                                  const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
@@ -1152,668 +594,325 @@ export default function App() {
                                  const wave = Math.sin( normY * effectiveRings * PI );
                                  const spacingPx = maxCropDim / effectiveRings;
                                  let threshold = (1 - val) * (lineThickness * 2);
-                                 if (is3DMode) {
-                                     const minDuty = minFeaturePx / spacingPx;
-                                     if (threshold < minDuty) threshold = minDuty;
-                                 }
+                                 if (is3DMode) { const minDuty = minFeaturePx / spacingPx; if (threshold < minDuty) threshold = minDuty; }
                                  if ((wave + 1) / 2 < threshold) isForeground = true;
                              } else if (mode === 'dots') {
                                  const rx = dx * Math.cos(radRotation) - dy * Math.sin(radRotation);
                                  const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
                                  const gridSize = maxCropDim / effectiveRings; 
                                  if (gridSize > 0) {
-                                     const cellX = Math.floor(rx / gridSize);
-                                     const cellY = Math.floor(ry / gridSize);
-                                     const lx = rx - ((cellX + 0.5) * gridSize);
-                                     const ly = ry - ((cellY + 0.5) * gridSize);
-                                     let dome = 0, normDist = 0;
-     
-                                     if (dotShape === 'circle') {
-                                             normDist = Math.sqrt(lx*lx + ly*ly) / (gridSize / 1.5);
-                                             if (normDist < 1) dome = Math.cos(normDist * (PI / 2));
-                                     } else if (dotShape === 'square') {
-                                             normDist = Math.max(Math.abs(lx), Math.abs(ly)) / (gridSize / 2.0); 
-                                             if (normDist < 1) dome = 1.0 - normDist;
-                                     } else if (dotShape === 'diamond') {
-                                             normDist = (Math.abs(lx) + Math.abs(ly)) / (gridSize / 1.5); 
-                                             if (normDist < 1) dome = 1.0 - normDist;
-                                     } else if (dotShape === 'triangle') {
-                                             const k = Math.sqrt(3);
-                                             normDist = Math.max(Math.abs(lx) * k/2 + ly/2, -ly) / (gridSize / 2.5);
-                                             if (normDist < 1) dome = 1.0 - normDist;
-                                     }
-                                     let cutoff = val / lineThickness;
-                                     if (is3DMode) {
-                                             const maxValForSafeSize = 1.0 - (minFeaturePx / gridSize); 
-                                             if (cutoff > maxValForSafeSize) cutoff = maxValForSafeSize;
-                                     }
-                                     if (dome > cutoff) isForeground = true;
+                                    const cellX = Math.floor(rx / gridSize), cellY = Math.floor(ry / gridSize);
+                                    const lx = rx - ((cellX + 0.5) * gridSize), ly = ry - ((cellY + 0.5) * gridSize);
+                                    let dome = 0, normDist = 0;
+                                    if (dotShape === 'circle') { normDist = Math.sqrt(lx*lx + ly*ly) / (gridSize / 1.5); if (normDist < 1) dome = Math.cos(normDist * (PI / 2)); }
+                                    else if (dotShape === 'square') { normDist = Math.max(Math.abs(lx), Math.abs(ly)) / (gridSize / 2.0); if (normDist < 1) dome = 1.0 - normDist; }
+                                    else if (dotShape === 'diamond') { normDist = (Math.abs(lx) + Math.abs(ly)) / (gridSize / 1.5); if (normDist < 1) dome = 1.0 - normDist; }
+                                    else if (dotShape === 'triangle') { const k = Math.sqrt(3); normDist = Math.max(Math.abs(lx) * k/2 + ly/2, -ly) / (gridSize / 2.5); if (normDist < 1) dome = 1.0 - normDist; }
+                                    let cutoff = val / lineThickness;
+                                    if (is3DMode) { const maxValForSafeSize = 1.0 - (minFeaturePx / gridSize); if (cutoff > maxValForSafeSize) cutoff = maxValForSafeSize; }
+                                    if (dome > cutoff) isForeground = true;
                                  }
                              }
-     
-                             if (isForeground) {
-                                 data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255;
-                             } 
+                             if (isForeground) { data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255; } 
                          }
                      }
-                     
                      const layerCanvas = document.createElement('canvas');
                      layerCanvas.width = w; layerCanvas.height = h;
                      layerCanvas.getContext('2d').putImageData(layerImgData, 0, 0);
-                     
-                     if (colorMode === 'mono' || i === 0) {
-                           oCtx.globalCompositeOperation = 'source-over';
-                     } else {
-                           oCtx.globalCompositeOperation = 'multiply'; 
-                     }
+                     if (colorMode === 'mono' || i === 0) oCtx.globalCompositeOperation = 'source-over'; else oCtx.globalCompositeOperation = 'multiply'; 
                      oCtx.drawImage(layerCanvas, 0, 0);
                      oCtx.globalCompositeOperation = 'source-over';
                  }
              });
-     
-             // Draw Border
+             
              if (borderWidth > 0) {
-                 const borderPx = (borderWidth * maxCropDim) / 200; 
-                 oCtx.lineWidth = borderPx;
-                 oCtx.strokeStyle = colorMode === 'cmyk' ? '#000000' : fgColor;
-                 oCtx.beginPath();
-                 if (currentFrameShape === 'circle') {
-                     oCtx.arc(centerX, centerY, maxCropDim / 2 - borderPx/2, 0, Math.PI * 2);
-                 } else {
-                     oCtx.rect(cropX + borderPx/2, cropY + borderPx/2, cropW - borderPx, cropH - borderPx);
-                 }
-                 oCtx.stroke();
+                 const borderPx = (borderWidth * maxCropDim) / 200; oCtx.lineWidth = borderPx; oCtx.strokeStyle = colorMode === 'cmyk' ? '#000000' : fgColor; oCtx.beginPath();
+                 if (currentFrameShape === 'circle') oCtx.arc(centerX, centerY, maxCropDim / 2 - borderPx/2, 0, Math.PI * 2); else oCtx.rect(cropX + borderPx/2, cropY + borderPx/2, cropW - borderPx, cropH - borderPx); oCtx.stroke();
              }
-        } // End else compare mode
 
-        // --- 4. FINAL COMPOSITION (Apply Edit View Zoom/Pan) ---
+             if (lithoPreview) {
+                 const pMin = modeSettings.litho.minDepth, pMax = modeSettings.litho.maxDepth, depthRange = pMax - pMin;
+                 const rawData = oCtx.getImageData(0, 0, w, h).data, litData = oCtx.createImageData(w, h), lData = litData.data;
+                 for (let y = 0; y < h; y++) {
+                     for (let x = 0; x < w; x++) {
+                         const i = (y*w + x) * 4;
+                         // Strictly mask for preview too
+                         const dx = x - centerX, dy = y - centerY, distSq = dx*dx + dy*dy;
+                         const isMasked = (currentFrameShape === 'circle' && distSq > maxRadiusSq) || (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH));
+                         
+                         if (isMasked || rawData[i+3] < 10) { lData[i] = 240; lData[i+1] = 240; lData[i+2] = 240; lData[i+3] = 255; continue; }
+                         const getZ = (idx) => pMin + ((1.0 - (rawData[idx] + rawData[idx+1] + rawData[idx+2])/3/255) * depthRange);
+                         const zCenter = getZ(i), zLeft = x>0 ? getZ((y*w + x-1)*4) : pMin, zTop = y>0 ? getZ(((y-1)*w + x)*4) : pMin;
+                         let intensity = Math.max(0, Math.min(255, 128 + ((zCenter-zLeft)+(zCenter-zTop))*20));
+                         lData[i] = intensity; lData[i+1] = intensity*0.95; lData[i+2] = intensity*0.9; lData[i+3] = 255;
+                     }
+                 }
+                 oCtx.putImageData(litData, 0, 0);
+             }
+        } 
         ctx.clearRect(0, 0, w, h);
-        
-        // Apply Transform
-        // We want to zoom into the outputCanvas center, but pan based on editView
-        ctx.save();
-        
-        // Translate to center
-        ctx.translate(w/2, h/2);
-        // Apply user zoom/pan
-        ctx.scale(editView.scale, editView.scale);
-        ctx.translate(editView.x, editView.y);
-        // Translate back
-        ctx.translate(-w/2, -h/2);
-        
-        // Draw the generated pattern/image
-        ctx.drawImage(outputCanvas, 0, 0);
-        ctx.restore();
+        if (isExport) ctx.drawImage(outputCanvas, 0, 0);
+        else { ctx.save(); ctx.translate(w/2, h/2); ctx.scale(editView.scale, editView.scale); ctx.translate(editView.x, editView.y); ctx.translate(-w/2, -h/2); ctx.drawImage(outputCanvas, 0, 0); ctx.restore(); }
+    } catch(e) { console.error(e); showToast("Rendering error.", 'error'); }
+  }, [step, scale, panX, panY, frameShape, liveCrop, cropAspectW, cropAspectH, mode, modeSettings, contrast, brightness, invert, colorMode, activeLayers, fgColor, borderWidth, centerHole, is3DMode, minThickness, lithoPreview, compareMode, editView, isDragging, rings, lineThickness, rotation, dotShape]);
 
-
-    } catch(e) {
-        console.error(e);
-        showToast("Rendering error. Try refreshing.", 'error');
-    }
-  };
-  
-  // --- Rendering Hooks ---
   useEffect(() => {
     if (!imageSrc || !canvasRef.current) return;
-
-    // OPTIMIZATION: Debounce the render call
+    const isInteractive = step === 'crop' || (step === 'edit' && isDragging) || (step === 'edit' && editView.scale !== 1);
+    const delay = isInteractive ? 0 : 30;
     if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
-
     renderTimeoutRef.current = setTimeout(() => {
         const canvas = canvasRef.current;
         if (!canvas || !canvas.parentElement) return;
-
-        const rect = canvas.parentElement.getBoundingClientRect();
-        // FIX: Capping DPR on high-density mobile screens
-        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-        
-        const targetWidth = Math.floor(rect.width * dpr);
-        const targetHeight = Math.floor(rect.height * dpr);
-
-        if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-            canvas.width = targetWidth;
-            canvas.height = targetHeight;
-        }
-
-        // Optimized context for frequent readbacks
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        renderFrame(ctx, canvas.width, canvas.height);
-    }, 30); // 30ms debounce (~33fps target)
-
+        const rect = canvas.parentElement.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        const targetWidth = Math.floor(rect.width * dpr), targetHeight = Math.floor(rect.height * dpr);
+        if (canvas.width !== targetWidth || canvas.height !== targetHeight) { canvas.width = targetWidth; canvas.height = targetHeight; }
+        renderFrame(canvas.getContext('2d', { willReadFrequently: true }), canvas.width, canvas.height);
+    }, delay); 
     return () => clearTimeout(renderTimeoutRef.current);
-  }, [
-    imageSrc, step,
-    scale, panX, panY, frameShape, 
-    liveCrop, cropAspectW, cropAspectH,
-    mode, modeSettings, 
-    contrast, brightness, invert, 
-    colorMode, activeLayers, fgColor, 
-    borderWidth, centerHole, 
-    is3DMode, minThickness, lithoPreview,
-    compareMode, editView // Added editView dependency
-  ]);
+  }, [renderFrame, imageSrc, step, isDragging, editView]);
 
-  // Window resize listener
-  useEffect(() => {
-      const handleResize = () => {
-          if (imageSrc && canvasRef.current) {
-             // Handle resize logic
-          }
-      };
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-  }, [imageSrc]);
-
-  // --- NEW: Lithophane STL Export ---
   const downloadSTL = useCallback(() => {
-      if (!sourceImageRef.current || !canvasRef.current) return;
-      setIsProcessing(true);
-      showToast('Generating STL from Crop...', 'info');
-      
+      if (!sourceImageRef.current) return;
+      setIsProcessing(true); showToast('Generating STL...', 'info');
       setTimeout(() => {
           try {
-              const baseDepth = modeSettings.litho.minDepth; 
-              const maxDepth = modeSettings.litho.maxDepth;
-              const widthMm = modeSettings.litho.widthMm;
-              const resolutionFactor = modeSettings.litho.resolution; 
+              const refCanvas = canvasRef.current; const baseCanvas = document.createElement('canvas');
+              baseCanvas.width = refCanvas.width; baseCanvas.height = refCanvas.height;
+              renderFrame(baseCanvas.getContext('2d'), baseCanvas.width, baseCanvas.height, true);
               
-              const canvas = canvasRef.current;
+              const w = baseCanvas.width, h = baseCanvas.height, maxCropDim = Math.min(w, h), centerX = w/2, centerY = h/2;
+              let cropW, cropH; let currentAspect = 1.0;
+              if (frameShape === 'custom') currentAspect = cropAspectW / cropAspectH;
+              if (frameShape === 'circle' || frameShape === 'square') { cropW = maxCropDim; cropH = maxCropDim; }
+              else { if (currentAspect >= 1) { cropW = maxCropDim; cropH = maxCropDim / currentAspect; } else { cropH = maxCropDim; cropW = maxCropDim * currentAspect; } }
+              const cropX = centerX - cropW / 2, cropY = centerY - cropH / 2;
               
-              const w = canvas.width;
-              const h = canvas.height;
-              const maxCropDim = Math.min(w, h);
-              const centerX = w / 2;
-              const centerY = h / 2;
+              const maxRes = 1000 * modeSettings.litho.resolution, scaleFactor = Math.min(1, maxRes / Math.max(cropW, cropH));
+              const meshW = Math.floor(cropW * scaleFactor), meshH = Math.floor(cropH * scaleFactor);
+              const meshCanvas = document.createElement('canvas'); meshCanvas.width = meshW; meshCanvas.height = meshH;
+              meshCanvas.getContext('2d').drawImage(baseCanvas, cropX, cropY, cropW, cropH, 0, 0, meshW, meshH);
+              const imgData = meshCanvas.getContext('2d').getImageData(0, 0, meshW, meshH).data;
               
-              let cropW, cropH, cropX, cropY;
-              let currentAspect = 1.0;
+              // Calculate Triangles (Strict Crop Shape)
+              const baseDepth = modeSettings.litho.minDepth, maxDepth = modeSettings.litho.maxDepth, widthMm = modeSettings.litho.widthMm, pxSize = widthMm / meshW;
+              const halfW = meshW/2, halfH = meshH/2;
               
-              if (frameShape === 'custom') {
-                  currentAspect = cropAspectW / cropAspectH;
-              }
-
-              if (frameShape === 'circle' || frameShape === 'square') {
-                  cropW = maxCropDim;
-                  cropH = maxCropDim;
-              } else { 
-                  const baseDim = maxCropDim;
-                  if (currentAspect >= 1) { 
-                      cropW = baseDim;
-                      cropH = baseDim / currentAspect;
-                  } else { 
-                      cropH = baseDim;
-                      cropW = baseDim * currentAspect;
-                  }
-              }
-              cropX = centerX - cropW / 2;
-              cropY = centerY - cropH / 2;
-
-              const maxRes = 1000 * resolutionFactor; 
-              const scaleFactor = Math.min(1, maxRes / Math.max(cropW, cropH));
-              
-              const meshW = Math.floor(cropW * scaleFactor);
-              const meshH = Math.floor(cropH * scaleFactor);
-              
-              const tempCanvas = document.createElement('canvas');
-              tempCanvas.width = meshW;
-              tempCanvas.height = meshH;
-              const ctx = tempCanvas.getContext('2d');
-              
-              // Important: We need to draw the *edit view* content or the raw content?
-              // STL should usually be WYSIWYG based on the pattern, but zoom/pan in edit mode is for inspection.
-              // We should render the pattern at 1:1 for export.
-              
-              // To get clean data for STL, we re-render the pattern frame at the mesh resolution without zoom/pan
-              // For simplicity here, we assume user wants what they see in terms of pattern, but scaled to meshW.
-              // However, the current canvas might be zoomed. 
-              // Better to grab data from the *unzoomed* generation logic. 
-              // Since renderFrame is complex, we will grab from current canvas but we must be careful if zoomed.
-              // Actually, since we draw to outputCanvas *before* zooming in renderFrame, we can't easily access that here without refactoring.
-              // PROPER FIX: Trigger a dedicated render for export.
-              
-              // For now, let's use the canvas but warn if zoomed? 
-              // Or better, let's just grab the screen pixels. If zoomed in, we lose outside context.
-              // Correct approach: Re-render logic is needed for pure export. 
-              // Given the complexity constraints, we will capture the current canvas state.
-              // NOTE: If Edit Zoom is active, the STL will be zoomed in. This is actually a feature (WYSIWYG).
-              
-              ctx.drawImage(canvas, cropX, cropY, cropW, cropH, 0, 0, meshW, meshH);
-              
-              const imgData = ctx.getImageData(0, 0, meshW, meshH).data;
-              
-              const header = new Uint8Array(80);
-              const triCount = (meshW - 1) * (meshH - 1) * 2;
-              const bufferSize = 84 + (50 * triCount);
-              const buffer = new ArrayBuffer(bufferSize);
-              const view = new DataView(buffer);
-              
-              for (let i = 0; i < 80; i++) view.setUint8(i, header[i]);
-              view.setUint32(80, triCount, true); 
-              
-              let offset = 84;
-              
-              const getHeight = (x, y) => {
-                  const idx = (y * meshW + x) * 4;
-                  if (imgData[idx+3] < 10) return 0; 
-                  let r = imgData[idx]; let g = imgData[idx+1]; let b = imgData[idx+2];
-                  const luma = (r+g+b)/3 / 255; 
-                  return baseDepth + ((1 - luma) * (maxDepth - baseDepth));
+              const isInside = (x, y) => {
+                  const dx = x - halfW, dy = y - halfH;
+                  if (frameShape === 'circle') return (dx*dx + dy*dy) <= (Math.min(halfW, halfH))**2; // Strict circle
+                  return true; 
               };
-              
-              const pxSize = widthMm / meshW; 
-              
-              for (let y = 0; y < meshH - 1; y++) {
-                  for (let x = 0; x < meshW - 1; x++) {
-                      const x0 = x * pxSize; const y0 = y * pxSize;
-                      const x1 = (x+1) * pxSize; const y1 = (y+1) * pxSize;
-                      const z00 = getHeight(x, y); const z10 = getHeight(x+1, y);
-                      const z01 = getHeight(x, y+1); const z11 = getHeight(x+1, y+1);
-                      
-                      // Triangle 1
-                      view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true); // Normal
-                      view.setFloat32(offset+12, x0, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z00, true); // v1
-                      view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true); // v2
-                      view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true); // v3
-                      view.setUint16(offset+48, 0, true); offset += 50;
-                      
-                      // Triangle 2
-                      view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true); // Normal
-                      view.setFloat32(offset+12, x1, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z10, true); // v1
-                      view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true); // v2
-                      view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true); // v3
-                      view.setUint16(offset+48, 0, true); offset += 50;
+
+              let validQuads = 0;
+              for(let y=0; y<meshH-1; y++) {
+                  for(let x=0; x<meshW-1; x++) {
+                      // Check center point or all corners for rigorous inside check
+                      if(frameShape === 'circle') {
+                          const dx = x - halfW, dy = y - halfH;
+                          if ((dx*dx + dy*dy) > (Math.min(halfW, halfH))**2) continue;
+                      }
+                      validQuads++;
                   }
               }
-              
+
+              const bufferSize = 84 + (50 * validQuads * 2);
+              const buffer = new ArrayBuffer(bufferSize), view = new DataView(buffer);
+              view.setUint32(80, validQuads * 2, true); // Header
+              let offset = 84; 
+
+              const getHeight = (x, y) => { const idx = (y * meshW + x) * 4; return imgData[idx+3] < 10 ? 0 : baseDepth + ((1 - (imgData[idx]+imgData[idx+1]+imgData[idx+2])/3/255) * (maxDepth - baseDepth)); };
+
+              for (let y = 0; y < meshH - 1; y++) {
+                 for (let x = 0; x < meshW - 1; x++) {
+                     if(frameShape === 'circle') {
+                          const dx = x - halfW, dy = y - halfH;
+                          if ((dx*dx + dy*dy) > (Math.min(halfW, halfH))**2) continue;
+                     }
+
+                     const x0 = x*pxSize, y0 = y*pxSize, x1 = (x+1)*pxSize, y1 = (y+1)*pxSize;
+                     const z00 = getHeight(x, y), z10 = getHeight(x+1, y), z01 = getHeight(x, y+1), z11 = getHeight(x+1, y+1);
+                     
+                     // Normal Calculation (Simplified Up)
+                     view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
+                     view.setFloat32(offset+12, x0, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z00, true);
+                     view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true);
+                     view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
+                     view.setUint16(offset+48, 0, true); offset += 50;
+
+                     view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
+                     view.setFloat32(offset+12, x1, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z10, true);
+                     view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true);
+                     view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
+                     view.setUint16(offset+48, 0, true); offset += 50;
+                 }
+              }
               const blob = new Blob([buffer], { type: 'application/octet-stream' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = `if-studio-lithophane-${Date.now()}.stl`;
-              link.click();
-              URL.revokeObjectURL(url);
+              const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `if-studio-litho-${Date.now()}.stl`; link.click(); 
+              setTimeout(() => URL.revokeObjectURL(url), 1000); 
               showToast("STL Generated!", 'success');
-              
-          } catch(e) {
-              console.error("STL Gen Error", e);
-              showToast("Failed to generate STL.", 'error');
-          } finally {
-              setIsProcessing(false);
-          }
+          } catch(e) { console.error(e); showToast("Failed to generate STL.", 'error'); } finally { setIsProcessing(false); }
       }, 100);
-  }, [frameShape, modeSettings.litho, cropAspectW, cropAspectH, minThickness]);
+  }, [renderFrame, frameShape, cropAspectW, cropAspectH, modeSettings.litho]);
 
-  // --- SVG Export Logic ---
   const downloadSVG = useCallback(() => { 
-    if (!sourceImageRef.current || !canvasRef.current) return;
-    setIsProcessing(true);
-    showToast(`Calculating Vectors...`, 'info');
-
-    setTimeout(() => {
-        try {
-            const canvas = canvasRef.current;
-            const ctx = canvas.getContext('2d');
-            const w = canvas.width;
-            const h = canvas.height;
-            // Note: SVG export relies on source data.
-            // If user has zoomed in Edit Mode, the SVG will still generate the FULL pattern
-            // because helperCanvasRef contains the cropped source at full resolution.
-            const imgData = ctx.getImageData(0, 0, w, h).data;
-
-            const PI = Math.PI;
-            const centerX = w / 2;
-            const centerY = h / 2;
-            const effectiveRings = Math.max(1, rings); 
-            
-            let cropW, cropH;
-            let finalAspect = 1.0;
-            if (frameShape === 'custom') finalAspect = cropAspectW / cropAspectH;
-
-            const maxCropDim = Math.min(w, h);
-            
-            if (frameShape === 'circle' || frameShape === 'square') {
-                cropW = maxCropDim;
-                cropH = maxCropDim;
-            } else { 
-                if (finalAspect >= 1) { cropW = maxCropDim; cropH = maxCropDim / finalAspect; }
-                else { cropH = maxCropDim; cropW = maxCropDim * finalAspect; }
-            }
-            const halfCropW = cropW / 2;
-            const halfCropH = cropH / 2;
-            const maxRadiusSq = (maxCropDim/2) * (maxCropDim/2);
-            const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1;
-
-            const pxPerMm = w / 200; 
-            const minFeaturePx = is3DMode ? (minThickness * pxPerMm) : 0;
+      if (!sourceImageRef.current) return;
+      setIsProcessing(true); showToast("Calculating Vectors...", 'info');
+      setTimeout(() => {
+          try {
+            const refCanvas = canvasRef.current; const w = refCanvas.width, h = refCanvas.height, centerX = w/2, centerY = h/2;
+            const tempCtx = helperCanvasRef.current.getContext('2d'); const sourceData = tempCtx.getImageData(0,0,w,h).data;
+            const maxCropDim = Math.min(w, h), effectiveRings = Math.max(1, rings);
+            const holeRadiusSq = (centerHole > 0) ? ((maxCropDim/2) * (centerHole/100))**2 : -1, maxRadiusSq = (maxCropDim/2)**2;
+            let cropW, cropH, cropX, cropY, currentAspect = 1.0;
+            if (frameShape === 'custom') currentAspect = cropAspectW / cropAspectH;
+            if (frameShape === 'circle' || frameShape === 'square') { cropW = maxCropDim; cropH = maxCropDim; } else { if (currentAspect >= 1) { cropW = maxCropDim; cropH = maxCropDim / currentAspect; } else { cropH = maxCropDim; cropW = maxCropDim * currentAspect; } }
+            cropX = centerX - cropW/2; cropY = centerY - cropH/2; const halfCropW = cropW/2, halfCropH = cropH/2;
 
             let svgBody = "";
-
-            const tempCtx = helperCanvasRef.current.getContext('2d', { willReadFrequently: true });
-            const sourceData = tempCtx.getImageData(0, 0, w, h).data;
-
             let layersToExport = [];
             if (colorMode === 'cmyk') {
-                if (activeLayers.c) layersToExport.push({ key: 'c', name: 'Cyan', color: CMYK_COLORS.c, angleOffset: CMYK_ANGLES.c });
-                if (activeLayers.m) layersToExport.push({ key: 'm', name: 'Magenta', color: CMYK_COLORS.m, angleOffset: CMYK_ANGLES.m });
-                if (activeLayers.y) layersToExport.push({ key: 'y', name: 'Yellow', color: CMYK_COLORS.y, angleOffset: CMYK_ANGLES.y });
-                if (activeLayers.k) layersToExport.push({ key: 'k', name: 'Key', color: CMYK_COLORS.k, angleOffset: CMYK_ANGLES.k });
-            } else {
-                layersToExport.push({ key: 'mono', name: 'Layer_1', color: fgColor, angleOffset: 0 });
-            }
+                if(activeLayers.c) layersToExport.push({key:'c',name:'Cyan',color:CMYK_COLORS.c,angle:CMYK_ANGLES.c});
+                if(activeLayers.m) layersToExport.push({key:'m',name:'Magenta',color:CMYK_COLORS.m,angle:CMYK_ANGLES.m});
+                if(activeLayers.y) layersToExport.push({key:'y',name:'Yellow',color:CMYK_COLORS.y,angle:CMYK_ANGLES.y});
+                if(activeLayers.k) layersToExport.push({key:'k',name:'Key',color:CMYK_COLORS.k,angle:CMYK_ANGLES.k});
+            } else layersToExport.push({key:'mono',name:'Layer_1',color:fgColor,angle:0});
 
-            const getSourceVal = (x, y, totalRotation, layerKey) => {
-                const ix = Math.floor(x); const iy = Math.floor(y);
-                if (ix < 0 || ix >= w || iy < 0 || iy >= h) return 1;
-                const dx = ix - centerX; const dy = iy - centerY; const distSq = dx*dx + dy*dy;
-                if (frameShape === 'circle' && distSq > maxRadiusSq) return 1;
-                if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) return 1;
-                if (distSq < holeRadiusSq) return 1;
-                
-                const idx = (iy * w + ix) * 4;
-                if (sourceData[idx+3] === 0) return 1;
-
-                let r = sourceData[idx]/255; let g = sourceData[idx+1]/255; let b = sourceData[idx+2]/255;
-                let val = 1.0;
-
-                if (colorMode === 'mono') {
-                    let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
-                    luma += brightness;
-                    luma = (luma - 128) * contrast + 128;
-                    if (luma < 0) luma = 0; if (luma > 255) luma = 255;
-                    val = luma / 255;
-                    if (invert) val = 1.0 - val;
-                } else {
-                    r = ((r - 0.5) * contrast + 0.5) + (brightness/255);
-                    g = ((g - 0.5) * contrast + 0.5) + (brightness/255);
-                    b = ((b - 0.5) * contrast + 0.5) + (brightness/255);
-                    r = Math.max(0, Math.min(1, r)); g = Math.max(0, Math.min(1, g)); b = Math.max(0, Math.min(1, b));
-
-                    let k = 1 - Math.max(r, g, b);
-                    let c = (1 - r - k) / (1 - k) || 0;
-                    let m = (1 - g - k) / (1 - k) || 0;
-                    let y = (1 - b - k) / (1 - k) || 0;
-                    
-                    if (layerKey === 'c') val = 1 - c;
-                    if (layerKey === 'm') val = 1 - m;
-                    if (layerKey === 'y') val = 1 - y;
-                    if (layerKey === 'k') val = 1 - k;
-                }
+            const getVal = (x,y,rot,key) => {
+                const ix = Math.floor(x), iy = Math.floor(y); if (ix<0||ix>=w||iy<0||iy>=h) return 1;
+                const idx = (iy*w+ix)*4; if (sourceData[idx+3]===0) return 1;
+                const dx=ix-centerX, dy=iy-centerY, dSq=dx*dx+dy*dy;
+                if (frameShape==='circle' && dSq>maxRadiusSq) return 1;
+                if (frameShape!=='circle' && (Math.abs(dx)>halfCropW || Math.abs(dy)>halfCropH)) return 1;
+                if (dSq<holeRadiusSq) return 1;
+                let r=sourceData[idx]/255, g=sourceData[idx+1]/255, b=sourceData[idx+2]/255, val=1;
+                if (colorMode==='mono') { let l = 0.299*r+0.587*g+0.114*b; l+=brightness; l=(l-128)*contrast+128; val=Math.min(1,Math.max(0,l/255)); if(invert) val=1-val; }
+                else { r=Math.min(1,((r-0.5)*contrast+0.5)+brightness/255); g=Math.min(1,((g-0.5)*contrast+0.5)+brightness/255); b=Math.min(1,((b-0.5)*contrast+0.5)+brightness/255); let k=1-Math.max(r,g,b); if(key==='c') val=1-((1-r-k)/(1-k)||0); if(key==='m') val=1-((1-g-k)/(1-k)||0); if(key==='y') val=1-((1-b-k)/(1-k)||0); if(key==='k') val=1-k; }
                 return val;
             };
 
-            const getLumaAt = (ix, iy) => {
-                const i = ((iy)*w + (ix))*4;
-                if (i < 0 || i >= sourceData.length) return 0;
-                let r = sourceData[i]/255, g = sourceData[i+1]/255, b = sourceData[i+2]/255;
-                return 0.299*r + 0.587*g + 0.114*b;
-            };
-
             layersToExport.forEach(layer => {
-                let layerPaths = [];
-                const totalRotation = rotation + layer.angleOffset;
-                const radRotation = (totalRotation * PI) / 180;
-                
-                if (mode === 'flow') {
-                    const gridSize = maxCropDim / effectiveRings; 
-                    const strokeLen = gridSize * (lineThickness * 3.0);
-                    
-                    for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
-                        for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
-                            const cx = centerX + x; const cy = centerY + y;
-                            
-                            const dx = cx - centerX; const dy = cy - centerY; const distSq = dx*dx + dy*dy;
-                            if (frameShape === 'circle' && distSq > maxRadiusSq) continue;
-                            if (frameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
-                            if (distSq < holeRadiusSq) continue;
-
-                            const ix = Math.floor(cx); const iy = Math.floor(cy);
-                            if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
-                            const idx = (iy * w + ix) * 4;
-                            if (sourceData[idx+3] === 0) continue;
-
-                            const luma = getLumaAt(ix, iy);
-                            const lumaR = getLumaAt(ix+1, iy);
-                            const lumaL = getLumaAt(ix-1, iy);
-                            const lumaD = getLumaAt(ix, iy+1);
-                            const lumaU = getLumaAt(ix, iy-1);
-
-                            const gx = lumaR - lumaL;
-                            const gy = lumaD - lumaU;
-                            
-                            const angle = Math.atan2(gy, gx) + Math.PI/2;
-                            const val = getSourceVal(cx, cy, totalRotation, layer.key); 
-                            if (val > 0.95) continue; 
-                            
-                            let strokeW = Math.max(0.5, gridSize*0.2);
-                            if (is3DMode && strokeW < minFeaturePx) strokeW = minFeaturePx;
-                            
-                            const len = strokeLen;
-                            const x1 = cx - Math.cos(angle) * len/2;
-                            const y1 = cy - Math.sin(angle) * len/2;
-                            const x2 = cx + Math.cos(angle) * len/2;
-                            const y2 = cy + Math.sin(angle) * len/2;
-                            
-                            layerPaths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${strokeW.toFixed(2)}" stroke-linecap="round" stroke="${layer.color}" />`);
+                let paths = []; const totalRot = rotation + layer.angle, radRot = totalRot * Math.PI / 180;
+                if (mode === 'spiral') {
+                    const spacing = (maxCropDim/2)/effectiveRings, maxTheta = effectiveRings*2*Math.PI, steps = Math.min(20000, effectiveRings*120), stepSize = maxTheta/steps;
+                    let inner=[], outer=[], drawing=false;
+                    for (let t=0; t<maxTheta; t+=stepSize) {
+                        const r = (t/maxTheta)*(maxCropDim/2), a = t+radRot, cx = centerX+r*Math.cos(a), cy = centerY+r*Math.sin(a);
+                        const val = getVal(cx,cy,totalRot,layer.key), wFactor = Math.max(0,(1-val)*lineThickness);
+                        if (wFactor*spacing > 0.5) {
+                            if (!drawing) drawing=true;
+                            inner.push({x:centerX+(r-wFactor*spacing/2)*Math.cos(a), y:centerY+(r-wFactor*spacing/2)*Math.sin(a)});
+                            outer.push({x:centerX+(r+wFactor*spacing/2)*Math.cos(a), y:centerY+(r+wFactor*spacing/2)*Math.sin(a)});
+                        } else if (drawing) {
+                            if(inner.length>2) { let d=`M ${inner[0].x.toFixed(2)} ${inner[0].y.toFixed(2)}`; for(let i=1;i<inner.length;i++) d+=` L ${inner[i].x.toFixed(2)} ${inner[i].y.toFixed(2)}`; d+=` L ${outer[outer.length-1].x.toFixed(2)} ${outer[outer.length-1].y.toFixed(2)}`; for(let i=outer.length-2;i>=0;i--) d+=` L ${outer[i].x.toFixed(2)} ${outer[i].y.toFixed(2)}`; d+=' Z'; paths.push(`<path d="${d}" />`); }
+                            inner=[]; outer=[]; drawing=false;
                         }
                     }
-                } else if (mode === 'dots') {
-                    const gridSize = maxCropDim / effectiveRings; 
-                    for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
-                        for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
-                            const rx = x * Math.cos(radRotation) - y * Math.sin(radRotation);
-                            const ry = x * Math.sin(radRotation) + y * Math.cos(radRotation);
-                            const cx = centerX + rx; const cy = centerY + ry;
-                            const val = getSourceVal(cx, cy, totalRotation, layer.key); 
-                            const thickness = (1 - val) * lineThickness; 
-                            if (thickness > 0.05) { 
-                                const size = gridSize * thickness; 
-                                if (dotShape === 'circle') {
-                                    layerPaths.push(`<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(size/1.5).toFixed(2)}" />`);
-                                } else if (dotShape === 'square') {
-                                    layerPaths.push(`<rect x="${(cx - size/2).toFixed(2)}" y="${(cy - size/2).toFixed(2)}" width="${size.toFixed(2)}" height="${size.toFixed(2)}" />`);
-                                } else if (dotShape === 'diamond') {
-                                    layerPaths.push(`<rect x="${(cx - size/2).toFixed(2)}" y="${(cy - size/2).toFixed(2)}" width="${size.toFixed(2)}" height="${size.toFixed(2)}" transform="rotate(45 ${cx} ${cy})" />`);
-                                } else if (dotShape === 'triangle') {
-                                    const hTri = size * (Math.sqrt(3)/2); const rTri = hTri * (2/3); 
-                                    const p1 = `${cx},${cy - rTri}`; const p2 = `${cx - size/2},${cy + (hTri - rTri)}`; const p3 = `${cx + size/2},${cy + (hTri - rTri)}`;
-                                    layerPaths.push(`<polygon points="${p1} ${p2} ${p3}" />`);
-                                }
-                            }
-                        }
-                    }
-
-                } else if (mode === 'spiral') {
-                    const spacingPx = (maxCropDim / 2) / effectiveRings;
-                    const maxTheta = effectiveRings * 2 * PI;
-                    const steps = Math.min(20000, effectiveRings * 120); 
-                    const stepSize = maxTheta / steps;
-                    let innerPoints = []; let outerPoints = []; let isDrawing = false;
-                    
-                    for (let theta = 0; theta < maxTheta; theta += stepSize) {
-                        const normDist = theta / maxTheta; const r = normDist * (maxCropDim / 2);
-                        const angle = theta + radRotation;
-                        const cx = centerX + r * Math.cos(angle); const cy = centerY + r * Math.sin(angle);
-                        const val = getSourceVal(cx, cy, totalRotation, layer.key);
-                        let wFactor = (1 - val) * lineThickness; if (wFactor < 0) wFactor = 0;
-                        if (is3DMode && wFactor > 0) { const minDuty = (minThickness * (w/200)) / spacingPx; if (wFactor < minDuty) wFactor = minDuty; }
-                        const actualWidth = wFactor * spacingPx;
-
-                        if (actualWidth > 0.5) { 
-                            if (!isDrawing) isDrawing = true; 
-                            const rInner = r - actualWidth/2; const rOuter = r + actualWidth/2;
-                            innerPoints.push({ x: centerX + rInner * Math.cos(angle), y: centerY + rInner * Math.sin(angle) });
-                            outerPoints.push({ x: centerX + rOuter * Math.cos(angle), y: centerY + rOuter * Math.sin(angle) });
-                        } else {
-                            if (isDrawing) {
-                                if (innerPoints.length > 2) {
-                                    let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
-                                    for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
-                                    d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
-                                    for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
-                                    d += "Z";
-                                    layerPaths.push(`<path d="${d}" stroke="none" />`);
-                                }
-                                innerPoints = []; outerPoints = []; isDrawing = false;
-                            }
-                        }
-                    }
-                    if (innerPoints.length > 2) {
-                        let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
-                        for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
-                        d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
-                        for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
-                        d += "Z";
-                        layerPaths.push(`<path d="${d}" stroke="none" />`);
-                    }
-
+                    if(inner.length>2) { let d=`M ${inner[0].x.toFixed(2)} ${inner[0].y.toFixed(2)}`; for(let i=1;i<inner.length;i++) d+=` L ${inner[i].x.toFixed(2)} ${inner[i].y.toFixed(2)}`; d+=` L ${outer[outer.length-1].x.toFixed(2)} ${outer[outer.length-1].y.toFixed(2)}`; for(let i=outer.length-2;i>=0;i--) d+=` L ${outer[i].x.toFixed(2)} ${outer[i].y.toFixed(2)}`; d+=' Z'; paths.push(`<path d="${d}" />`); }
                 } else if (mode === 'lines') {
-                    const spacingPx = maxCropDim / effectiveRings;
-                    for (let ly = -maxCropDim/2; ly < maxCropDim/2; ly += spacingPx) {
-                        let innerPoints = []; let outerPoints = []; let isDrawing = false;
-                        const stepPx = 2; 
-                        for (let lx = -maxCropDim/2; lx < maxCropDim/2; lx += stepPx) {
-                            const gx = centerX + (lx * Math.cos(radRotation) - ly * Math.sin(radRotation));
-                            const gy = centerY + (lx * Math.sin(radRotation) + ly * Math.cos(radRotation));
-                            const val = getSourceVal(gx, gy, totalRotation, layer.key);
-                            let wFactor = (1 - val) * lineThickness; if (wFactor < 0) wFactor = 0;
-                            if (is3DMode && wFactor > 0) { const minDuty = (minThickness * (w/200)) / spacingPx; if (wFactor < minDuty) wFactor = minDuty; }
-                            const actualWidth = wFactor * spacingPx;
-                            
-                            if (actualWidth > 0.5) {
-                                if (!isDrawing) isDrawing = true;
-                                const nx = -Math.sin(radRotation) * (actualWidth/2);
-                                const ny = Math.cos(radRotation) * (actualWidth/2);
-                                innerPoints.push({ x: gx + nx, y: gy + ny });
-                                outerPoints.push({ x: gx - nx, y: gy - ny });
-                            } else {
-                                if (isDrawing) {
-                                    if (innerPoints.length > 2) {
-                                        let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
-                                        for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
-                                        d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
-                                        for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
-                                        d += "Z";
-                                        layerPaths.push(`<path d="${d}" stroke="none" />`);
-                                    }
-                                    innerPoints = []; outerPoints = []; isDrawing = false;
-                                }
+                     // SVG Lines Logic
+                     const spacing = maxCropDim/effectiveRings;
+                     for (let ly = -maxCropDim/2; ly < maxCropDim/2; ly+=spacing) {
+                         let inner=[], outer=[], drawing=false;
+                         for (let lx = -maxCropDim/2; lx < maxCropDim/2; lx+=2) {
+                             const gx = centerX + (lx * Math.cos(radRot) - ly * Math.sin(radRot));
+                             const gy = centerY + (lx * Math.sin(radRot) + ly * Math.cos(radRot));
+                             const val = getVal(gx,gy,totalRot,layer.key), wFactor = Math.max(0,(1-val)*lineThickness);
+                             if (wFactor*spacing > 0.5) {
+                                 if(!drawing) drawing=true;
+                                 const nx = -Math.sin(radRot)*(wFactor*spacing/2), ny = Math.cos(radRot)*(wFactor*spacing/2);
+                                 inner.push({x:gx+nx, y:gy+ny}); outer.push({x:gx-nx, y:gy-ny});
+                             } else if (drawing) {
+                                 if(inner.length>2) { let d=`M ${inner[0].x.toFixed(2)} ${inner[0].y.toFixed(2)}`; for(let i=1;i<inner.length;i++) d+=` L ${inner[i].x.toFixed(2)} ${inner[i].y.toFixed(2)}`; d+=` L ${outer[outer.length-1].x.toFixed(2)} ${outer[outer.length-1].y.toFixed(2)}`; for(let i=outer.length-2;i>=0;i--) d+=` L ${outer[i].x.toFixed(2)} ${outer[i].y.toFixed(2)}`; d+=' Z'; paths.push(`<path d="${d}" />`); }
+                                 inner=[]; outer=[]; drawing=false;
+                             }
+                         }
+                         if(inner.length>2) { let d=`M ${inner[0].x.toFixed(2)} ${inner[0].y.toFixed(2)}`; for(let i=1;i<inner.length;i++) d+=` L ${inner[i].x.toFixed(2)} ${inner[i].y.toFixed(2)}`; d+=` L ${outer[outer.length-1].x.toFixed(2)} ${outer[outer.length-1].y.toFixed(2)}`; for(let i=outer.length-2;i>=0;i--) d+=` L ${outer[i].x.toFixed(2)} ${outer[i].y.toFixed(2)}`; d+=' Z'; paths.push(`<path d="${d}" />`); }
+                     }
+                } else if (mode === 'dots') {
+                     const gridSize = maxCropDim/effectiveRings; 
+                     for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
+                        for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
+                            const rx = x * Math.cos(radRot) - y * Math.sin(radRot), ry = x * Math.sin(radRot) + y * Math.cos(radRot);
+                            const cx = centerX+rx, cy = centerY+ry;
+                            const val = getVal(cx, cy, totalRot, layer.key), size = gridSize * (1-val) * lineThickness;
+                            if (size > 0.5) {
+                                if (dotShape === 'circle') paths.push(`<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(size/1.5).toFixed(2)}" />`);
+                                else if (dotShape === 'square') paths.push(`<rect x="${(cx-size/2).toFixed(2)}" y="${(cy-size/2).toFixed(2)}" width="${size.toFixed(2)}" height="${size.toFixed(2)}" />`);
+                                else if (dotShape === 'diamond') paths.push(`<rect x="${(cx-size/2).toFixed(2)}" y="${(cy-size/2).toFixed(2)}" width="${size.toFixed(2)}" height="${size.toFixed(2)}" transform="rotate(45 ${cx} ${cy})" />`);
+                                else if (dotShape === 'triangle') { const hT = size*0.866, rT = hT*0.66; paths.push(`<polygon points="${cx},${cy-rT} ${cx-size/2},${cy+(hT-rT)} ${cx+size/2},${cy+(hT-rT)}" />`); }
                             }
                         }
-                        if (innerPoints.length > 2) {
-                            let d = `M ${innerPoints[0].x.toFixed(2)} ${innerPoints[0].y.toFixed(2)} `;
-                            for(let i=1; i<innerPoints.length; i++) d += `L ${innerPoints[i].x.toFixed(2)} ${innerPoints[i].y.toFixed(2)} `;
-                            d += `L ${outerPoints[outerPoints.length-1].x.toFixed(2)} ${outerPoints[outerPoints.length-1].y.toFixed(2)} `;
-                            for(let i=outerPoints.length-2; i>=0; i--) d += `L ${outerPoints[i].x.toFixed(2)} ${outerPoints[i].y.toFixed(2)} `;
-                            d += "Z";
-                            layerPaths.push(`<path d="${d}" stroke="none" />`);
+                     }
+                } else if (mode === 'flow') {
+                     // Flow Field Vector Export (simplified segments)
+                     const gridSize = maxCropDim/effectiveRings, strokeLen = gridSize*lineThickness*3;
+                     for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
+                        for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
+                            const cx = centerX+x, cy = centerY+y; const val = getVal(cx,cy,totalRot,layer.key);
+                            if (val > 0.95) continue;
+                            const ix = Math.floor(cx), iy = Math.floor(cy), idx = (iy*w+ix)*4;
+                            if(sourceData[idx+3]===0) continue;
+                            const getL = (i) => 0.299*sourceData[i]/255 + 0.587*sourceData[i+1]/255 + 0.114*sourceData[i+2]/255;
+                            const gx = getL(((iy)*w+(ix+1))*4)-getL(((iy)*w+(ix-1))*4), gy = getL(((iy+1)*w+ix)*4)-getL(((iy-1)*w+ix)*4);
+                            const ang = Math.atan2(gy,gx)+Math.PI/2;
+                            const x1 = cx - Math.cos(ang)*strokeLen/2, y1 = cy - Math.sin(ang)*strokeLen/2;
+                            const x2 = cx + Math.cos(ang)*strokeLen/2, y2 = cy + Math.sin(ang)*strokeLen/2;
+                            paths.push(`<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke-width="${(gridSize*0.2).toFixed(2)}" stroke-linecap="round" />`);
                         }
-                    }
+                     }
                 }
+                svgBody += `<g id="${layer.name}" fill="${layer.color}" stroke="${layer.color}">\n${paths.join('\n')}\n</g>\n`;
+            });
 
-                svgBody += `<g id="${layer.name}" fill="${layer.color}" stroke="none">\n${layerPaths.join('\n')}\n</g>\n`;
-            }); 
+            const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}mm" height="${h}mm">${svgBody}</svg>`;
+            const blob = new Blob([svgContent], {type: 'image/svg+xml'});
+            const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `if-studio-${Date.now()}.svg`; link.click(); 
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            showToast("SVG Generated!", 'success');
+          } catch(e) { console.error(e); showToast("SVG Gen Error", 'error'); } finally { setIsProcessing(false); }
+      }, 100);
+  }, [mode, rings, rotation, frameShape, cropAspectW, cropAspectH, centerHole, colorMode, activeLayers, fgColor, borderWidth, dotShape, lineThickness]);
 
-            if (borderWidth > 0) {
-                const borderPx = (borderWidth * maxCropDim) / 200;
-                const cropX = (frameShape === 'circle') ? centerX : (centerX - cropW / 2);
-                const cropY = (frameShape === 'circle') ? centerY : (centerY - cropH / 2);
-                const strokeColor = colorMode === 'cmyk' ? '#000000' : fgColor;
-                
-                svgBody += `<g id="Border">\n`;
-                if (frameShape === 'circle') {
-                    svgBody += `<circle cx="${centerX.toFixed(2)}" cy="${centerY.toFixed(2)}" r="${(maxCropDim/2 - borderPx/2).toFixed(2)}" stroke="${strokeColor}" stroke-width="${borderPx.toFixed(2)}" fill="none" />`;
-                } else {
-                    svgBody += `<rect x="${(cropX + borderPx/2).toFixed(2)}" y="${(cropY + borderPx/2).toFixed(2)}" width="${(cropW - borderPx).toFixed(2)}" height="${(cropH - borderPx).toFixed(2)}" stroke="${strokeColor}" stroke-width="${borderPx.toFixed(2)}" fill="none" />`;
-                }
-                svgBody += `\n</g>`;
-            }
-
-            const svgFile = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${svgBody}</svg>`;
-            
-            const blob = new Blob([svgFile], {type: 'image/svg+xml'});
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `if-studio-${mode}-${Date.now()}.svg`;
-            link.click();
-            URL.revokeObjectURL(url);
-            showToast("SVG Generated Successfully!", 'success');
-
-        } catch(e) {
-            console.error("SVG Gen Error", e);
-            showToast("Failed to generate SVG. Try reducing density.", 'error');
-        } finally {
-            setIsProcessing(false);
-        }
-    }, 100); // Short delay to allow UI to update state to "Processing"
-  }, [mode, rings, rotation, frameShape, cropAspectW, cropAspectH, centerHole, sourceImageRef, colorMode, activeLayers, fgColor, borderWidth, dotShape, lineThickness, is3DMode, minThickness]);
-
-  // --- NEW: PNG Export Logic ---
   const downloadPNG = useCallback((exportScale = 1) => {
     if (!sourceImageRef.current) return;
     setIsProcessing(true);
-    showToast("Generating High-Res PNG...", 'info');
-
     setTimeout(() => {
         try {
             const img = sourceImageRef.current;
-            // Define export dimensions. Use source image resolution for best quality
             const w = img.width * exportScale;
             const h = img.height * exportScale;
-
             const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = w;
-            exportCanvas.height = h;
-            const ctx = exportCanvas.getContext('2d');
-
-            // Pass isExport=true to renderFrame to ensure high quality and NO crop UI
-            renderFrame(ctx, w, h, true);
-
+            exportCanvas.width = w; exportCanvas.height = h;
+            renderFrame(exportCanvas.getContext('2d'), w, h, true);
             const link = document.createElement('a');
-            link.download = `if-studio-export-${Date.now()}.png`;
+            link.download = `if-studio-${Date.now()}.png`;
             link.href = exportCanvas.toDataURL('image/png');
             link.click();
             showToast("PNG Exported!", 'success');
-        } catch(e) {
-            console.error(e);
-            showToast("Export failed.", 'error');
-        } finally {
-            setIsProcessing(false);
-        }
+        } catch(e) { showToast("Export failed.", 'error'); } 
+        finally { setIsProcessing(false); }
     }, 100);
   }, [renderFrame]);
     
-  // --- Cropping Action ---
   const applyCropAndGoToEdit = useCallback(() => {
-    // 1. Apply LIVE crop settings to FINAL states
-    setScale(liveCrop.scale);
-    setPanX(liveCrop.panX);
-    setPanY(liveCrop.panY);
+    // Apply Live Crop settings to Final State
+    setScale(liveCrop.scale); 
+    setPanX(liveCrop.panX); 
+    setPanY(liveCrop.panY); 
     setFrameShape(liveCrop.frameShape);
     
-    // 2. Switch mode
-    setStep('edit');
-    setActiveCropTab(null);
-    setActiveTab('pattern'); // Automatically open main footer on mobile
+    // Switch Mode
+    setStep('edit'); 
+    setActiveCropTab(null); 
+    setActiveTab('pattern');
     showToast("Crop Applied!");
   }, [liveCrop]);
 
-
-  // --- UI RENDER ---
   const renderControls = (section) => {
       switch(section) {
           case 'pattern': return (
               <>
-                <div className="mb-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Layers size={14} className="text-gray-400" />
-                        <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Pattern Mode</span>
-                    </div>
-                    {/* Randomize Button */}
-                    <button onClick={randomizeSettings} className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Randomize Settings">
-                        <Dice5 size={16} />
-                    </button>
-                </div>
                 <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
                     <ModeButton active={mode === 'spiral'} onClick={() => handleModeChange('spiral')} icon={Disc} label="Spiral" />
                     <ModeButton active={mode === 'lines'} onClick={() => handleModeChange('lines')} icon={Layers} label="Lines" />
@@ -1821,671 +920,259 @@ export default function App() {
                     <ModeButton active={mode === 'flow'} onClick={() => handleModeChange('flow')} icon={Waves} label="Flow" />
                     <ModeButton active={mode === 'photo'} onClick={() => handleModeChange('photo')} icon={PhotoIcon} label="Photo" />
                 </div>
-
-                {/* CONSOLIDATED PATTERN SETTINGS SECTION */}
-                <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                    {mode === 'dots' && (
-                        <div className="mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                            <span className="text-[10px] uppercase font-bold text-gray-400 mb-2 block tracking-wider">Dot Shape</span>
-                            <div className="flex gap-2">
-                                <ShapeButton active={dotShape === 'circle'} onClick={() => updateSetting('dotShape', 'circle')} icon={Circle} label="Circle" />
-                                <ShapeButton active={dotShape === 'square'} onClick={() => updateSetting('dotShape', 'square')} icon={Square} label="Square" />
-                                <ShapeButton active={dotShape === 'diamond'} onClick={() => updateSetting('dotShape', 'diamond')} icon={Square} rotateIcon label="Diamond" />
-                                <ShapeButton active={dotShape === 'triangle'} onClick={() => updateSetting('dotShape', 'triangle')} icon={Triangle} label="Triangle" />
-                            </div>
-                        </div>
-                    )}
-                    
-                    {mode === 'photo' && (
-                        <div className="p-3 bg-blue-50 text-blue-800 text-[10px] rounded-lg mb-4">
-                             Photo mode passes the image through without applying a vector pattern. Useful for standard Lithophanes.
-                        </div>
-                    )}
-
-                    <div className="flex items-center justify-between mt-2 mb-4">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pattern Parameters</span>
-                        <button onClick={resetPatternSettings} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset Pattern">
-                                <RotateCcw size={14}/>
-                        </button>
-                    </div>
-                    {mode !== 'photo' && (
-                        <>
-                        <Slider 
-                            highlight 
-                            label={currentLabels.density} 
-                            value={rings} 
-                            // Standard range for all remaining modes
-                            min={10} max={200} step={1} 
-                            onChange={(v) => updateSetting('rings', v)} 
-                            icon={Circle}
-                            tooltip={currentLabels.densityTooltip} 
-                            onReset={handleSliderReset}
-                            resetValue={DEFAULT_PATTERN_SETTINGS.rings}
-                            settingKey="rings"
-                        />
-                        <Slider 
-                            highlight 
-                            label={currentLabels.thickness} 
-                            value={lineThickness} 
-                            min={0.1} max={2.0} step={0.05} 
-                            onChange={(v) => updateSetting('thickness', v)} 
-                            icon={Zap}
-                            tooltip={currentLabels.thicknessTooltip} 
-                            onReset={handleSliderReset}
-                            resetValue={DEFAULT_PATTERN_SETTINGS.thickness}
-                            settingKey="thickness"
-                        />
-                        </>
-                    )}
-                    {mode !== 'flow' && mode !== 'photo' && (
-                        <Slider 
-                            label="Rotation" 
-                            value={rotation} 
-                            min={0} max={180} step={1} 
-                            onChange={(v) => updateSetting('rotation', v)} 
-                            icon={RefreshCw} 
-                            onReset={handleSliderReset}
-                            resetValue={DEFAULT_PATTERN_SETTINGS.rotation}
-                            settingKey="rotation"
-                        />
-                    )}
-                </section>
+                {mode === 'dots' && (
+                     <div className="mb-4 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                         <div className="flex gap-2">
+                             <ShapeButton active={dotShape === 'circle'} onClick={() => updateSetting('dotShape', 'circle')} icon={Circle} label="Circle" />
+                             <ShapeButton active={dotShape === 'square'} onClick={() => updateSetting('dotShape', 'square')} icon={Square} label="Square" />
+                             <ShapeButton active={dotShape === 'diamond'} onClick={() => updateSetting('dotShape', 'diamond')} icon={Square} rotateIcon label="Diamond" />
+                             <ShapeButton active={dotShape === 'triangle'} onClick={() => updateSetting('dotShape', 'triangle')} icon={Triangle} label="Triangle" />
+                         </div>
+                     </div>
+                )}
+                <div className="flex items-center justify-between mt-2 mb-4">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Pattern Parameters</span>
+                    <button onClick={resetPatternSettings} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors"><RotateCcw size={14}/></button>
+                </div>
+                {mode !== 'photo' && (
+                   <>
+                   <Slider highlight label={currentLabels.density} value={rings} min={10} max={200} step={1} onChange={(v) => updateSetting('rings', v)} icon={Circle} tooltip={currentLabels.densityTooltip} settingKey="rings" />
+                   <Slider highlight label={currentLabels.thickness} value={lineThickness} min={0.1} max={2.0} step={0.05} onChange={(v) => updateSetting('thickness', v)} icon={Zap} tooltip={currentLabels.thicknessTooltip} settingKey="thickness" />
+                   {mode !== 'flow' && <Slider label="Rotation" value={rotation} min={0} max={180} step={1} onChange={(v) => updateSetting('rotation', v)} icon={RefreshCw} tooltip="Rotate the pattern angle." settingKey="rotation" />}
+                   </>
+                )}
               </>
           );
           case 'tune': return (
               <>
-                    <div className="flex items-center justify-between mb-4">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Fine Tune</span>
-                        <button onClick={resetView} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset View">
-                                    <RotateCcw size={14}/>
-                        </button>
-                    </div>
-                    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                        <div className="grid grid-cols-2 gap-3">
-                           <Slider 
-                                label="Contrast" 
-                                value={contrast} 
-                                min={0.5} max={3.0} step={0.1} 
-                                onChange={setContrast} 
-                                onReset={handleSliderReset}
-                                resetValue={1.0}
-                                settingKey="contrast"
-                           />
-                           <Slider 
-                                label="Bright" 
-                                value={brightness} 
-                                min={-100} max={100} step={5} 
-                                onChange={setBrightness} 
-                                onReset={handleSliderReset}
-                                resetValue={0}
-                                settingKey="brightness"
-                           />
-                        </div>
-                        <Slider 
-                              label="Center Hole (Relative)" 
-                              tooltip="Removes the pattern from the central area (0 = no hole, 80 = large hole)."
-                              value={centerHole} 
-                              min={0} 
-                              max={80} 
-                              step={1} 
-                              onChange={setCenterHole} 
-                              icon={LayoutTemplate} 
-                              onReset={handleSliderReset}
-                              resetValue={0}
-                              settingKey="centerHole"
-                          />
-                          <Slider 
-                              label="Border Thickness" 
-                              tooltip="Add a solid ring/border around the edge of the pattern."
-                              value={borderWidth} 
-                              min={0} 
-                              max={10} 
-                              step={0.1} 
-                              onChange={setBorderWidth} 
-                              icon={Frame} 
-                              onReset={handleSliderReset}
-                              resetValue={0}
-                              settingKey="borderWidth"
-                          />
-                    </div>
+                  <div className="grid grid-cols-2 gap-3">
+                     <Slider label="Contrast" value={contrast} min={0.5} max={3.0} step={0.1} onChange={setContrast} tooltip="Adjust image contrast before processing." settingKey="contrast"/>
+                     <Slider label="Bright" value={brightness} min={-100} max={100} step={5} onChange={setBrightness} tooltip="Adjust image brightness before processing." settingKey="brightness"/>
+                  </div>
+                  <Slider label="Center Hole" value={centerHole} min={0} max={80} step={1} onChange={setCenterHole} icon={LayoutTemplate} tooltip="Create a hole in the center (0-80%)." settingKey="centerHole" />
+                  <Slider label="Border" value={borderWidth} min={0} max={10} step={0.1} onChange={setBorderWidth} icon={Frame} tooltip="Add a solid border around the pattern." settingKey="borderWidth" />
               </>
           );
           case 'color': return (
-              <div className="space-y-3">
-                  <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Color & Layers</span>
-                        <button onClick={() => {setFgColor('#000000'); setInvert(false); setColorMode('mono'); showToast("Colors Reset");}} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset Colors">
-                                    <RotateCcw size={14}/>
-                        </button>
-                  </div>
-                  
-                  {/* COLOR MODE SELECTOR */}
-                  {/* Hide if Litho Preview OR Photo Mode is active (Photo mode forces mono/single layer) */}
-                  {!lithoPreview && mode !== 'photo' ? (
-                      <div className="flex p-1 bg-gray-100 rounded-lg mb-4">
-                          <button onClick={() => setColorMode('mono')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'mono' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>Monochrome</button>
-                          <button onClick={() => setColorMode('cmyk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'cmyk' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}>CMYK Layers</button>
-                      </div>
-                  ) : (
-                      <div className="p-3 bg-blue-50 text-blue-800 text-[10px] rounded-lg mb-4">
-                          {mode === 'photo' 
-                            ? "Photo mode is strictly single-layer (Monochrome/Grayscale)." 
-                            : "Lithophanes use luminance to generate height. Color separation is disabled."}
-                      </div>
-                  )}
-
-                  <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                      {/* Force Mono UI if in Photo Mode, regardless of colorMode state */}
-                      {(colorMode === 'mono' || mode === 'photo') ? (
-                          <>
-                            {!lithoPreview && <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColor} />}
-                            <Toggle label="Invert Brightness" active={invert} onToggle={() => setInvert(!invert)} icon={Zap} />
-                          </>
-                      ) : (
-                          <div className="space-y-4">
-                              <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Active Ink Layers</div>
-                              <div className="grid grid-cols-4 gap-2">
-                                  {['c','m','y','k'].map(k => (
-                                      <button 
-                                        key={k}
-                                        onClick={() => setActiveLayers(p => ({...p, [k]: !p[k]}))}
-                                        className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 transition-all ${activeLayers[k] ? 'bg-white border-current' : 'bg-gray-50 border-gray-100 opacity-50'}`}
-                                        style={{ color: activeLayers[k] ? (k==='k'?'#000':CMYK_COLORS[k]) : '#9ca3af', borderColor: activeLayers[k] ? (k==='y' ? '#EAB308' : (k==='k'?'#000':CMYK_COLORS[k])) : '' }}
-                                      >
-                                          <div className="w-4 h-4 rounded-full mb-1" style={{backgroundColor: k==='k'?'#000':CMYK_COLORS[k]}}/>
-                                          <span className="text-xs font-bold uppercase">{k}</span>
-                                      </button>
-                                  ))}
-                              </div>
-                              <div className="p-3 bg-blue-50 text-blue-800 text-[10px] rounded-lg">
-                                  <p><strong>Note:</strong> CMYK mode generates 4 overlapping patterns rotated at standard angles (15°, 75°, 0°, 45°) to mix colors. Exporting SVG will create grouped layers for easy plotting.</p>
-                              </div>
-                              <Toggle label="Invert Brightness" active={invert} onToggle={() => setInvert(!invert)} icon={Zap} />
-                          </div>
-                      )}
-                  </section>
-              </div>
-          );
-          
-          case 'litho': return (
               <>
-                 <div className="mb-3 flex items-center gap-2">
-                    <Box size={14} className="text-gray-400" />
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">3D Lithophane</span>
-                 </div>
-                 
-                 <div className="mb-6"> {/* Removed md:hidden to show on desktop */}
-                    <Toggle 
-                        label="Enable 3D Preview" 
-                        description="Simulate Lithophane lighting on current pattern."
-                        active={lithoPreview} 
-                        onToggle={() => setLithoPreview(!lithoPreview)} 
-                        icon={BoxSelect} 
-                    />
-                </div>
-                
-                <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                    <div className="flex items-center justify-between mt-2 mb-4">
-                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">3D Parameters</span>
-                         <button onClick={() => {updateSetting('widthMm', 100); updateSetting('minDepth', 0.8); updateSetting('maxDepth', 3.0); updateSetting('resolution', 0.5); showToast("Litho Reset");}} className="p-1.5 hover:bg-gray-100 rounded-md text-gray-400 hover:text-blue-500 transition-colors" title="Reset Litho">
-                                <RotateCcw size={14}/>
-                        </button>
-                    </div>
-                    
-                    <Slider 
-                        label="Physical Width (mm)" 
-                        value={modeSettings.litho.widthMm} 
-                        min={20} max={300} step={1} 
-                        onChange={(v) => updateSetting('widthMm', v)} 
-                        icon={Ruler}
-                        tooltip="The physical width of the printed lithophane."
-                        settingKey="widthMm"
-                    />
-                    <div className="grid grid-cols-2 gap-3">
-                        <Slider 
-                            label="Min Depth" 
-                            value={modeSettings.litho.minDepth} 
-                            min={0.2} max={2.0} step={0.1} 
-                            onChange={(v) => updateSetting('minDepth', v)} 
-                            tooltip="Thinnest part of print (Lightest areas)."
-                            settingKey="minDepth"
-                        />
-                        <Slider 
-                            label="Max Depth" 
-                            value={modeSettings.litho.maxDepth} 
-                            min={1.0} max={6.0} step={0.1} 
-                            onChange={(v) => updateSetting('maxDepth', v)} 
-                            tooltip="Thickest part of print (Darkest areas)."
-                            settingKey="maxDepth"
-                        />
-                    </div>
-                    <Slider 
-                        highlight
-                        label="Voxel Resolution" 
-                        value={modeSettings.litho.resolution} 
-                        min={0.1} max={1.0} step={0.1} 
-                        onChange={(v) => updateSetting('resolution', v)} 
-                        icon={Scaling}
-                        tooltip="Higher = More detail but larger file size (slower)."
-                        settingKey="resolution"
-                    />
-                </section>
+                 {!lithoPreview && mode !== 'photo' && (
+                      <div className="flex p-1 bg-gray-100 rounded-lg mb-4">
+                          <button onClick={() => setColorMode('mono')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'mono' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>Mono</button>
+                          <button onClick={() => setColorMode('cmyk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'cmyk' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>CMYK</button>
+                      </div>
+                 )}
+                 {(colorMode === 'mono' || mode === 'photo') ? (
+                      <>
+                        {!lithoPreview && <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColor} />}
+                        <Toggle label="Invert" active={invert} onToggle={() => setInvert(!invert)} icon={Zap} description="Invert darks and lights." />
+                      </>
+                 ) : (
+                      <div className="grid grid-cols-4 gap-2 mb-4">
+                          {['c','m','y','k'].map(k => (
+                              <button key={k} onClick={() => setActiveLayers(p => ({...p, [k]: !p[k]}))} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 ${activeLayers[k] ? 'bg-white border-current' : 'bg-gray-50 border-gray-100 opacity-50'}`} style={{ color: activeLayers[k] ? (k==='k'?'#000':CMYK_COLORS[k]) : '#9ca3af', borderColor: activeLayers[k] ? (k==='y' ? '#EAB308' : (k==='k'?'#000':CMYK_COLORS[k])) : '' }}>
+                                  <span className="text-xs font-bold uppercase">{k}</span>
+                              </button>
+                          ))}
+                      </div>
+                 )}
               </>
           );
-
+          case 'litho': return (
+              <>
+                 <Toggle label="Enable 3D Preview" description="Simulate Lithophane." active={lithoPreview} onToggle={() => setLithoPreview(!lithoPreview)} icon={BoxSelect} />
+                 <div className="mt-4">
+                    <Slider label="Physical Width (mm)" value={modeSettings.litho.widthMm} min={20} max={300} step={1} onChange={(v) => updateSetting('widthMm', v)} icon={Ruler} tooltip="Width of the final 3D print in mm." settingKey="widthMm"/>
+                    <div className="grid grid-cols-2 gap-3">
+                        <Slider label="Min Depth" value={modeSettings.litho.minDepth} min={0.2} max={2.0} step={0.1} onChange={(v) => updateSetting('minDepth', v)} tooltip="Thinnest part (lightest area)." settingKey="minDepth"/>
+                        <Slider label="Max Depth" value={modeSettings.litho.maxDepth} min={1.0} max={6.0} step={0.1} onChange={(v) => updateSetting('maxDepth', v)} tooltip="Thickest part (darkest area)." settingKey="maxDepth"/>
+                    </div>
+                    <Slider label="Voxel Resolution" value={modeSettings.litho.resolution} min={0.1} max={1.0} step={0.1} onChange={(v) => updateSetting('resolution', v)} icon={Scaling} tooltip="Higher = better detail but larger file." settingKey="resolution"/>
+                 </div>
+              </>
+          );
           case 'download': return (
               <div className="space-y-4">
-                      <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-                      
-                      {/* 3D MODE / MIN THICKNESS CONTROLS */}
-                      {/* Hide for Photo Mode as it doesn't use vector thickness logic */}
-                      {!lithoPreview && mode !== 'photo' && (
-                          <>
-                             <Toggle 
-                                label="3D Print Mode" 
-                                description="Enforce minimum line thickness for printer compatibility."
-                                active={is3DMode} 
-                                onToggle={() => setIs3DMode(!is3DMode)} 
-                                icon={Printer} 
-                            />
-                            {is3DMode && (
-                                    <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 animate-in fade-in">
-                                        <Slider 
-                                            label="Min Thickness (mm)" 
-                                            value={minThickness} 
-                                            min={0.1} 
-                                            max={1.0} 
-                                            step={0.01} 
-                                            onChange={setMinThickness} 
-                                            onReset={handleSliderReset}
-                                            resetValue={DEFAULT_MIN_THICKNESS}
-                                            settingKey="minThickness"
-                                        />
-                                    </div>
-                            )}
-                         </>
-                      )}
-                      
-                      {/* DOWNLOAD BUTTONS */}
-                      <div className="pt-4 border-t border-gray-100">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-2">Download Files</span>
-                          <div className="grid grid-cols-2 gap-2">
-                              {/* FINAL Export Buttons */}
-                              <button onClick={() => downloadSVG()} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm disabled:opacity-50 transition-colors">
-                                    <Layers size={14} className="mb-0.5" /> SVG (Vector)
-                              </button>
-                              <button onClick={() => downloadPNG(1)} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm disabled:opacity-50 transition-colors">
-                                    <ImageIcon size={14} className="mb-0.5" /> PNG (Raster)
-                              </button>
-                              {/* NEW: STL Button (Conditional) */}
-                              {lithoPreview && (
-                                <button onClick={() => downloadSTL()} disabled={!imageSrc} className="col-span-2 flex flex-row gap-2 items-center justify-center py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg font-bold text-xs border border-gray-200 shadow-sm disabled:opacity-50 transition-colors">
-                                    <Box size={14} /> STL (Lithophane)
-                                </button>
-                              )}
-                          </div>
-                      </div>
-                      </section>
+                  {mode !== 'photo' && (
+                      <Toggle label="3D Print Mode" description="Enforce minimum thickness." active={is3DMode} onToggle={() => setIs3DMode(!is3DMode)} icon={Printer} />
+                  )}
+                  {is3DMode && <Slider label="Min Thickness (mm)" value={minThickness} min={0.32} max={1.0} step={0.01} onChange={setMinThickness} tooltip="Minimum feature size for your printer." settingKey="minThickness" />}
+                  <div className="grid grid-cols-2 gap-2">
+                      <button onClick={() => downloadSVG()} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><Layers size={14} className="mb-0.5" /> SVG (Vector)</button>
+                      <button onClick={() => downloadPNG(1)} disabled={!imageSrc} className="flex flex-col items-center justify-center py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg font-bold text-xs border border-blue-200 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><ImageIcon size={14} className="mb-0.5" /> PNG (Raster)</button>
+                      {lithoPreview && <button onClick={() => downloadSTL()} disabled={!imageSrc} className="col-span-2 flex flex-row gap-2 items-center justify-center py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-600 rounded-lg font-bold text-xs border border-gray-200 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><Box size={14} /> STL (Lithophane)</button>}
+                  </div>
               </div>
           );
           default: return null;
       }
-  }
-    
-  // --- UI RENDER (Mobile Crop Controls Drawer Content) ---
-  const renderMobileCropControls = (tab) => {
-    switch (tab) {
-        case 'shape':
-            return (
-                <div className="space-y-4">
-                    <div className="text-[10px] uppercase font-bold text-gray-400 mb-3 tracking-wider">Frame Shape</div>
-                    <div className="flex gap-3">
-                        {/* Circle */}
-                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'circle'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'circle' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Circle size={24} className="mb-2"/><span className="text-xs font-bold">Circle</span></button>
-                        {/* Square */}
-                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'square'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'square' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><Square size={24} className="mb-2"/><span className="text-xs font-bold">Square</span></button>
-                        {/* Custom */}
-                        <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'custom'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${liveCrop.frameShape === 'custom' ? 'bg-blue-50 border-blue-200 text-blue-600 ring-1 ring-blue-300' : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'}`}><LayoutTemplate size={24} className="mb-2"/><span className="text-xs font-bold">Custom</span></button>
-                    </div>
-                    {liveCrop.frameShape === 'custom' && (
-                        <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-200 animate-in fade-in space-y-3">
-                            <span className="text-[10px] uppercase font-bold text-gray-400 block tracking-wider">Aspect Ratio (W:H)</span>
-                            <div className="flex gap-2">
-                                <input 
-                                    type="number" 
-                                    value={cropAspectW} 
-                                    onChange={(e) => setCropAspectW(Math.max(1, parseInt(e.target.value) || 1))}
-                                    min="1"
-                                    className="w-1/2 p-2 text-sm text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
-                                    aria-label="Custom Aspect Ratio Width"
-                                />
-                                <input 
-                                    type="number" 
-                                    value={cropAspectH} 
-                                    onChange={(e) => setCropAspectH(Math.max(1, parseInt(e.target.value) || 1))}
-                                    min="1"
-                                    className="w-1/2 p-2 text-sm text-center font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-500 transition-all"
-                                    aria-label="Custom Aspect Ratio Height"
-                                />
-                            </div>
-                        </div>
-                    )}
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                        <Slider label="Zoom" value={liveCrop.scale} min={0.5} max={3.0} step={0.1} onChange={(v) => setLiveCrop(prev => ({...prev, scale: v}))} />
-                    </div>
-                </div>
-            );
-        default: return null;
-    }
-}
-    
-  // --- UI RENDER (Crop Input Section - Desktop Only) ---
-  const renderCropControls = () => (
-      <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
-          <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
-              <Crop size={24} className="text-[#3B82F6] mx-auto mb-2" />
-              <h3 className="font-bold text-gray-800">Step 1: Crop</h3>
-              <p className="text-xs text-gray-500 mt-1">Choose frame & position image</p>
-          </div>
-          <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-              {renderMobileCropControls('shape')}
-          </section>
-          <button onClick={applyCropAndGoToEdit} className="w-full py-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">Apply Crop <ArrowRight size={18} /></button>
-      </div>
-  );
-    
-  // Dynamic height calculation for the canvas area on mobile
-  const isMobileDrawerOpen = window.innerWidth < 768 && (activeTab || activeCropTab);
-    
-  // Calculate the required negative margin/padding for the canvas content to respect the mobile header and footer areas.
-  // REMOVED minHeight: '100%' to fix mobile overflow issues with drawer.
-  const canvasStyle = window.innerWidth < 768 ? {
-      // Top space: Mobile Header (48px)
-      // Bottom space: Fixed Nav (56px/64px) + Drawer (max 40vh) if open
-      
-      // We set the top padding of the flex container to the header height (pt-12 = 48px)
-      // We set the bottom padding of the flex container dynamically.
-      // paddingBottom: isMobileDrawerOpen ? `calc(${MOBILE_DRAWER_HEIGHT} + ${MOBILE_NAV_HEIGHT + 1}px)` : `${MOBILE_NAV_HEIGHT}px`,
-      // Use dynamic height:
-      paddingBottom: isMobileDrawerOpen ? `${drawerHeight + MOBILE_NAV_HEIGHT}px` : `${MOBILE_NAV_HEIGHT}px`,
-      // The canvas itself will take up the remaining space dynamically
-  } : {};
+  };
 
+  const isMobileDrawerOpen = window.innerWidth < 768 && (activeTab || activeCropTab);
+  const canvasStyle = window.innerWidth < 768 ? { paddingBottom: isMobileDrawerOpen ? `${drawerHeight + MOBILE_NAV_HEIGHT}px` : `${MOBILE_NAV_HEIGHT}px` } : {};
 
   return (
-    <div className="flex h-screen w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
-
+    <div className="flex h-[100dvh] w-full bg-gray-50 text-slate-800 font-sans overflow-hidden" style={{ touchAction: 'none' }} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
       <StatusToast toast={toast} onClose={() => setToast({ message: null, type: 'info' })} />
       <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
-
-      {/* Drag & Drop Visual Overlay */}
-      {isDragOver && (
-          <div className="fixed inset-0 z-[100] bg-blue-600/95 flex flex-col items-center justify-center animate-in fade-in duration-200 pointer-events-none">
-              <Upload size={64} className="text-white mb-4 animate-bounce" />
-              <h2 className="text-3xl font-bold text-white tracking-tight">Drop Image Here</h2>
-              <p className="text-blue-100 mt-2">Release to upload instantly</p>
-          </div>
-      )}
-
-      {/* MOBILE HEADER - ALWAYS VISIBLE (Fixed Top) */}
+      
+      {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40">
            <div className="flex items-center gap-2 font-bold text-gray-800 text-sm"><Activity className="text-[#3B82F6]" size={16}/> IF Studio</div>
-           {/* UTILITY ICONS - ALWAYS VISIBLE */}
            <div className="flex items-center gap-1">
-                <button onClick={handleShare} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg" title="Share App">
-                    <Share2 size={18}/> {/* SHARE ICON */}
-                </button>
-                 <button onClick={() => setShowAbout(true)} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg" title="About">
-                    <HelpCircle size={18}/> {/* ABOUT ICON */}
-                </button>
-                <label className="p-1.5 bg-gray-50 text-gray-600 rounded-lg cursor-pointer" title="Upload New Image">
-                    <Plus size={18}/> {/* NEW IMAGE BUTTON */}
+                <button onClick={handleShare} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg"><Share2 size={18}/></button>
+                <button onClick={() => setShowAbout(true)} className="p-1.5 bg-gray-50 text-gray-600 rounded-lg"><HelpCircle size={18}/></button>
+                <label className="p-1.5 bg-gray-50 text-gray-600 rounded-lg cursor-pointer" title="New Image">
+                    <Plus size={18}/>
                     <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
                 </label>
-            </div>
+           </div>
       </div>
 
-      {/* DESKTOP SIDEBAR */}
+      {/* Desktop Sidebar */}
       <div className={`hidden md:flex fixed inset-y-0 left-0 w-96 bg-gray-50 border-r border-gray-200 flex-col overflow-hidden shadow-xl z-40`}>
-        <div className="p-6 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#3B82F6] flex items-center justify-center shadow-lg"><Activity className="text-white" size={24} /></div>
-                <div><h1 className="text-xl font-bold text-gray-900 tracking-tight">IF Studio</h1><p className="text-[10px] text-gray-400 font-mono tracking-wider uppercase">Precision Vector Art Engine for Makers & Fabrication</p></div>
-            </div>
-            <button onClick={handleShare} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-500 transition-colors" title="Share App"><Share2 size={20}/></button>
-            <button onClick={() => setShowAbout(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-500 transition-colors" title="About"><HelpCircle size={20}/></button>
-        </div>
-
-        <div className="p-6 space-y-8 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 flex-1">
-          {step === 'crop' ? (
-              renderCropControls() // Use new render function
-          ) : (
-              <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-                  <div className="flex items-center justify-between p-1">
-                      <div className="text-xs font-bold text-emerald-600 flex items-center gap-2"><Check size={12} className='text-emerald-500' /> Crop</div>
-                      <button onClick={handleDoubleClick} className="text-xs text-gray-400 hover:text-blue-600 underline">Edit Crop</button>
-                  </div>
-                  {renderControls('pattern')}
-                  <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                      <div className="flex items-center gap-2 mb-6 text-emerald-600 text-xs font-bold uppercase tracking-wider"><Move size={14} /> Fine Tune</div>
-                      {renderControls('tune')}
-                  </section>
-                  <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                      <div className="flex items-center gap-2 mb-6 text-purple-500 text-xs font-bold uppercase tracking-wider"><Palette size={14} /> Color</div>
-                      {renderControls('color')}
-                  </section>
-                  <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-                      <div className="flex items-center gap-2 mb-6 text-orange-500 text-xs font-bold uppercase tracking-wider"><Settings size={14} /> Export Settings</div>
-                      {renderControls('litho')}
-                      {renderControls('download')}
-                  </section>
-              </div>
-          )}
-        </div>
-        
-        {step === 'edit' && (
-             <div className="p-6 border-t border-gray-100 space-y-4 bg-white shrink-0">
-                 <label className="flex items-center justify-center w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl cursor-pointer transition-all border border-transparent hover:border-gray-200 group">
-                     <Plus size={16} className="mr-2 group-hover:text-[#3B82F6]" />
-                     <span className="font-bold text-xs">New Image</span>
-                     <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
-                 </label>
+         <div className="p-6 border-b border-gray-100 bg-white sticky top-0 z-10 shrink-0 flex items-center justify-between gap-3">
+             <div className="flex items-center gap-3">
+                 <div className="w-10 h-10 rounded-xl bg-[#3B82F6] flex items-center justify-center shadow-lg"><Activity className="text-white" size={24} /></div>
+                 <div><h1 className="text-xl font-bold text-gray-900 tracking-tight">IF Studio</h1><p className="text-[10px] text-gray-400 font-mono tracking-wider uppercase">Precision Vector Art</p></div>
              </div>
-        )}
+             <button onClick={handleShare} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-500 transition-colors"><Share2 size={20}/></button>
+             <button onClick={() => setShowAbout(true)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-blue-500 transition-colors"><HelpCircle size={20}/></button>
+         </div>
+         <div className="p-6 space-y-8 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 flex-1">
+            {step === 'crop' ? (
+                <div className="space-y-6 animate-in fade-in slide-in-from-left-4">
+                    <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl text-center"><Crop size={24} className="text-[#3B82F6] mx-auto mb-2" /><h3 className="font-bold text-gray-800">Crop</h3></div>
+                    <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+                        <div className="flex gap-3">
+                            <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'circle'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border ${liveCrop.frameShape === 'circle' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-200'}`}><Circle size={24} className="mb-2"/><span className="text-xs font-bold">Circle</span></button>
+                            <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'square'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border ${liveCrop.frameShape === 'square' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-200'}`}><Square size={24} className="mb-2"/><span className="text-xs font-bold">Square</span></button>
+                        </div>
+                        <Slider label="Zoom" value={liveCrop.scale} min={0.5} max={3.0} step={0.1} onChange={(v) => setLiveCrop(prev => ({...prev, scale: v}))} />
+                    </section>
+                    <button onClick={applyCropAndGoToEdit} className="w-full py-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">Apply Crop <ArrowRight size={18} /></button>
+                </div>
+            ) : (
+                <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
+                    <div className="flex items-center justify-between p-1">
+                        <div className="text-xs font-bold text-emerald-600 flex items-center gap-2"><Check size={12} className='text-emerald-500' /> Crop</div>
+                        <button onClick={handleDoubleClick} className="text-xs text-gray-400 hover:text-blue-600 underline">Edit Crop</button>
+                    </div>
+                    {renderControls('pattern')}
+                    <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm"><div className="flex items-center gap-2 mb-6 text-emerald-600 text-xs font-bold uppercase tracking-wider"><Move size={14} /> Fine Tune</div>{renderControls('tune')}</section>
+                    <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm"><div className="flex items-center gap-2 mb-6 text-purple-500 text-xs font-bold uppercase tracking-wider"><Palette size={14} /> Color</div>{renderControls('color')}</section>
+                    <section className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm"><div className="flex items-center gap-2 mb-6 text-orange-500 text-xs font-bold uppercase tracking-wider"><Settings size={14} /> Export Settings</div>{renderControls('litho')}{renderControls('download')}</section>
+                </div>
+            )}
+         </div>
+         {step === 'edit' && (
+              <div className="p-6 border-t border-gray-100 space-y-4 bg-white shrink-0">
+                  <label className="flex items-center justify-center w-full py-3 bg-gray-50 hover:bg-gray-100 text-gray-500 rounded-xl cursor-pointer transition-all border border-transparent hover:border-gray-200 group">
+                      <Plus size={16} className="mr-2 group-hover:text-[#3B82F6]" /><span className="font-bold text-xs">New Image</span>
+                      <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                  </label>
+              </div>
+         )}
       </div>
 
-      {/* CANVAS AREA - Dynamic Padding applied here to prevent overlap */}
-      <div 
-        className={`flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0`}
-        ref={containerRef}
-        style={canvasStyle}
-        // Removed onWheel handler prop since we're using a passive:false listener via useEffect
-      >
-        {/* Main Content */}
-        <div 
-            className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-2 md:p-8 min-h-0" /* Changed p-4 to p-2 for mobile space */
+      {/* Canvas Area */}
+      <div className={`flex-1 relative flex flex-col overflow-hidden md:pl-96 pt-12 md:pt-0`} ref={containerRef} style={imageSrc ? canvasStyle : {}}>
+        <div className="flex-1 w-full relative flex items-center justify-center overflow-hidden bg-gray-50 p-2 md:p-8 min-h-0"
             onMouseDown={handleStart} onMouseMove={handleMove} onMouseUp={handleEnd} onMouseLeave={handleEnd}
-            onTouchStart={handleTouchStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
+            onTouchStart={handleStart} onTouchMove={handleMove} onTouchEnd={handleEnd}
             onDoubleClick={handleDoubleClick}
         >
-            {/* Checkerboard for Transparency Visibility */}
             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'conic-gradient(#ccc 90deg, white 90deg)', backgroundSize: '20px 20px' }} />
-
-            {/* SKELETON LOADING / BACKGROUND IMAGE PREVIEW (Blur) */}
-            {imageSrc && (
-                <div 
-                    className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50 blur-xl"
-                    style={{
-                        transform: step === 'edit' ? `scale(${editView.scale}) translate(${editView.x}px, ${editView.y}px)` : 'none',
-                        transition: 'transform 0.1s linear'
-                    }}
-                >
-                   <img src={imageSrc} className="max-w-full max-h-full object-contain" alt="Background Preview"/>
-                </div>
-            )}
-
-
-            {/* UPLOAD IMAGE SCREEN CONTENT */}
             {!imageSrc ? (
-            <div className="relative z-10 text-center space-y-6 max-w-xs md:max-w-md p-8 border-2 border-dashed border-gray-300 rounded-3xl bg-white shadow-sm mx-4">
-                <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-blue-50/50 mb-4"><ImageIcon size={40} className="text-blue-500" /></div>
-                <div><h2 className="2xl font-black text-gray-900 mb-2">IF Studio</h2><p className="text-gray-500 text-sm">Professional Halftone Engine</p></div>
-                <label className="inline-flex items-center px-8 py-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-2xl cursor-pointer shadow-xl shadow-blue-200 transition-transform hover:-translate-y-1"><Plus size={20} className="mr-2" /><span className="font-bold">Upload Photo</span><input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /></label>
-                <p className="text-[10px] text-gray-400 flex items-center justify-center gap-1 mt-4"><ShieldCheck size={12} /> 100% Private. Processed locally.</p>
-            </div>
+                 <div className="relative z-10 text-center space-y-6 max-w-xs md:max-w-md p-8 border-2 border-dashed border-gray-300 rounded-3xl bg-white shadow-sm mx-4">
+                    <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto ring-8 ring-blue-50/50 mb-4"><ImageIcon size={40} className="text-blue-500" /></div>
+                    <div><h2 className="2xl font-black text-gray-900 mb-2">IF Studio</h2><p className="text-gray-500 text-sm">Professional Halftone Engine</p></div>
+                    <label className="inline-flex items-center px-8 py-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-2xl cursor-pointer shadow-xl shadow-blue-200 transition-transform hover:-translate-y-1"><Plus size={20} className="mr-2" /><span className="font-bold">Upload Photo</span><input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} /></label>
+                 </div>
             ) : (
-            <div className="absolute top-[5px] left-[5px] right-[5px] bottom-[5px] shadow-2xl border border-gray-200 bg-white/0">
-                <canvas 
-                    ref={canvasRef} 
-                    // Canvas must fill the new absolute container entirely. object-contain keeps the aspect ratio of the drawing within the physical canvas element's bounds.
-                    className="w-full h-full object-contain" 
-                />
-                
-                {/* Loading Spinner */}
-                {isProcessing && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/95 text-blue-600 px-6 py-3 rounded-full text-sm font-bold flex items-center shadow-xl animate-pulse border border-blue-100"><RefreshCw size={16} className="animate-spin mr-3" /> PROCESSING</div>}
-                
-                {/* Edit Overlay Controls - DESKTOP ONLY (Moved mobile controls to bottom bar) */}
-                {step === 'edit' && (
-                    <div className="hidden md:block">
-                          <button 
-                             className="absolute top-4 right-4 bg-white hover:bg-gray-50 text-gray-600 p-2 md:p-3 rounded-full border border-gray-200 shadow-lg transition-all active:scale-95 z-50 group"
-                             onMouseDown={() => setCompareMode(true)}
-                             onMouseUp={() => setCompareMode(false)}
-                             onMouseLeave={() => setCompareMode(false)}
-                             onTouchStart={() => setCompareMode(true)}
-                             onTouchEnd={() => setCompareMode(false)}
-                             onTouchCancel={() => setCompareMode(false)}
-                             title="Hold to Compare Original"
-                             aria-label="Compare"
-                          >
-                             {compareMode ? <Eye size={18} className="md:w-5 md:h-5" /> : <EyeOff size={18} className="md:w-5 md:h-5" />}
-                          </button>
-                          <button 
-                             className="absolute top-4 left-4 bg-white hover:bg-gray-50 text-gray-600 p-2 md:p-3 rounded-full border border-gray-200 shadow-lg transition-all active:scale-95 z-50 group"
-                             onClick={handleDoubleClick} 
-                             title="Edit Crop"
-                             aria-label="Edit Crop"
-                            >
-                              <Crop size={18} className="md:w-5 md:h-5" />
-                          </button>
-                          {/* Fit to Screen Button for Desktop */}
-                          <button 
-                             className="absolute bottom-4 right-4 bg-white hover:bg-gray-50 text-gray-600 p-2 md:p-3 rounded-full border border-gray-200 shadow-lg transition-all active:scale-95 z-50 group"
-                             onClick={resetView} 
-                             title="Fit to Screen"
-                             aria-label="Fit to Screen"
-                            >
-                              <Maximize size={18} className="md:w-5 md:h-5" />
-                          </button>
-                    </div>
-                )}
-            </div> 
+                <div className="absolute top-[5px] left-[5px] right-[5px] bottom-[5px] shadow-2xl border border-gray-200 bg-white/0 group">
+                    <canvas ref={canvasRef} className="w-full h-full object-contain" />
+                    {isProcessing && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/95 text-blue-600 px-6 py-3 rounded-full text-sm font-bold flex items-center shadow-xl animate-pulse border border-blue-100"><RefreshCw size={16} className="animate-spin mr-3" /> PROCESSING</div>}
+                    
+                    {/* --- CANVAS OVERLAY BUTTONS (ALWAYS VISIBLE) --- */}
+                    {step === 'edit' && (
+                        <div className="block transition-opacity duration-200">
+                            {/* Top Left: Edit Crop */}
+                            <button onClick={handleDoubleClick} className="absolute top-4 left-4 p-3 bg-white/90 backdrop-blur-sm text-gray-600 rounded-full shadow-lg border border-gray-200 hover:text-blue-600 transition-colors z-50 active:scale-95" title="Edit Crop">
+                                <Crop size={20} />
+                            </button>
+                            
+                            {/* Top Right: Compare */}
+                            <button 
+                                onMouseDown={() => setCompareMode(true)} onMouseUp={() => setCompareMode(false)}
+                                onMouseLeave={() => setCompareMode(false)}
+                                onTouchStart={() => setCompareMode(true)} onTouchEnd={() => setCompareMode(false)}
+                                className="absolute top-4 right-4 p-3 bg-white/90 backdrop-blur-sm text-gray-600 rounded-full shadow-lg border border-gray-200 hover:text-blue-600 transition-colors z-50 active:scale-95" title="Hold to Compare">
+                                {compareMode ? <Eye size={20} /> : <EyeOff size={20} />}
+                            </button>
+                            
+                            {/* Bottom Right: Fit to Screen (View Reset Only) */}
+                            <button onClick={handleFitToScreen} className="absolute bottom-4 right-4 p-3 bg-white/90 backdrop-blur-sm text-gray-600 rounded-full shadow-lg border border-gray-200 hover:text-blue-600 transition-colors z-50 active:scale-95" title="Fit View">
+                                <Maximize size={20} />
+                            </button>
+                        </div>
+                    )}
+                </div>
             )}
         </div>
-
-      {/* Mobile Bottom Navigation (Edit/Upload Modes) - FIXED BOTTOM */}
+      </div>
+      
+      {/* Mobile Nav (Always Visible, Disabled State if !imageSrc) */}
       {step !== 'crop' && (
           <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
-              {/* Drawer Content */}
-              {imageSrc && activeTab && step === 'edit' && (
-                  <div 
-                    className="border-b border-gray-100 bg-gray-50/95 overflow-y-auto shadow-inner flex flex-col" 
-                    style={{height: `${drawerHeight}px`, maxHeight: '85vh', minHeight: '20vh'}} // Use dynamic height state
-                  >
-                      {/* Drag Handle */}
-                      <div 
-                           className="w-full flex justify-center py-3 cursor-ns-resize touch-none hover:bg-gray-100 transition-colors shrink-0"
-                           onTouchStart={handleDrawerDragStart}
-                           onTouchMove={handleDrawerDragMove}
-                           onTouchEnd={handleDrawerDragEnd}
-                      >
-                           <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
-                      </div>
-
-                      <div className="px-3 pb-3 flex-1 overflow-y-auto">
-                          <div className="flex justify-between items-center mb-3">
-                              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeTab} controls</span>
-                          </div>
-                          {renderControls(activeTab)}
-                      </div>
-                  </div>
-              )}
-              
-              {/* Floating Mobile Actions (Compare) - Now positioned above footer */}
-              {imageSrc && step === 'edit' && (
-                <div className="absolute -top-12 right-4 flex gap-2">
-                    {/* Fit to Screen Button for Mobile */}
-                    <button 
-                         className="bg-white/95 text-gray-600 p-2.5 rounded-full border border-gray-200 shadow-lg active:scale-95"
-                         onClick={resetView} 
-                         title="Fit to Screen"
-                         aria-label="Fit to Screen"
-                    >
-                        <Maximize size={20} />
-                    </button>
-                    <button 
-                         className="bg-white/95 text-gray-600 p-2.5 rounded-full border border-gray-200 shadow-lg active:scale-95"
-                         onClick={handleDoubleClick} // Uses handleDoubleClick to sync state before switching
-                         title="Edit Crop"
-                         aria-label="Edit Crop"
-                    >
-                        <Crop size={20} />
-                    </button>
-                    <button 
-                         className="bg-white/95 text-gray-600 p-2.5 rounded-full border border-gray-200 shadow-lg active:scale-95"
-                         onMouseDown={() => setCompareMode(true)}
-                         onMouseUp={() => setCompareMode(false)}
-                         onTouchStart={() => setCompareMode(true)}
-                         onTouchEnd={() => setCompareMode(false)}
-                         title="Compare"
-                         aria-label="Compare"
-                    >
-                         {compareMode ? <Eye size={20} /> : <EyeOff size={20} />}
-                    </button>
-                </div>
-              )}
-
-              {/* Fixed Navigation Bar */}
-              <div className={`flex justify-around items-center h-14 bg-white ${!imageSrc ? 'opacity-50 pointer-events-none' : ''}`}>
-                  <button onClick={() => handleMobileTabClick('pattern')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'pattern' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`} title="Pattern" aria-label="Pattern"><Layers size={20}/><span className="text-[9px] font-medium">Pattern</span></button>
-                  <button onClick={() => handleMobileTabClick('tune')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'tune' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`} title="Tune" aria-label="Tune"><Move size={20}/><span className="text-[9px] font-medium">Tune</span></button>
-                  <button onClick={() => handleMobileTabClick('color')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'color' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`} title="Color" aria-label="Color"><Palette size={20}/><span className="text-[9px] font-medium">Color</span></button>
-                  <button onClick={() => handleMobileTabClick('litho')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'litho' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`} title="3D / Litho" aria-label="3D / Litho"><Box size={20}/><span className="text-[9px] font-medium">3D / Litho</span></button>
-                  <button onClick={() => handleMobileTabClick('download')} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'download' && imageSrc ? 'text-[#3B82F6]' : 'text-gray-400'}`} title="Download" aria-label="Download"><Download size={20}/><span className="text-[9px] font-medium">Download</span></button>
-              </div>
+             {imageSrc && activeTab && (
+                 <div className="border-b border-gray-100 bg-gray-50/95 overflow-y-auto shadow-inner flex flex-col" style={{height: `${drawerHeight}px`, maxHeight: '85vh', minHeight: '20vh'}}>
+                    <div className="w-full flex justify-center py-3 cursor-ns-resize touch-none hover:bg-gray-100 transition-colors shrink-0" onTouchStart={handleDrawerDragStart} onTouchMove={handleDrawerDragMove} onTouchEnd={handleDrawerDragEnd}>
+                        <div className="w-12 h-1.5 bg-gray-300 rounded-full" />
+                    </div>
+                    <div className="px-3 pb-3 flex-1 overflow-y-auto">
+                        <div className="flex justify-between items-center mb-3"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeTab} controls</span></div>
+                        {renderControls(activeTab)}
+                    </div>
+                 </div>
+             )}
+             <div className="flex justify-around items-center h-16 bg-white">
+                 <button onClick={() => handleMobileTabClick('pattern')} disabled={!imageSrc} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'pattern' && imageSrc ? 'text-blue-600' : 'text-gray-400'} ${!imageSrc ? 'opacity-40 cursor-not-allowed' : ''}`}><Layers size={24}/><span className="text-[10px]">Pattern</span></button>
+                 <button onClick={() => handleMobileTabClick('tune')} disabled={!imageSrc} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'tune' && imageSrc ? 'text-blue-600' : 'text-gray-400'} ${!imageSrc ? 'opacity-40 cursor-not-allowed' : ''}`}><Move size={24}/><span className="text-[10px]">Tune</span></button>
+                 <button onClick={() => handleMobileTabClick('color')} disabled={!imageSrc} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'color' && imageSrc ? 'text-blue-600' : 'text-gray-400'} ${!imageSrc ? 'opacity-40 cursor-not-allowed' : ''}`}><Palette size={24}/><span className="text-[10px]">Color</span></button>
+                 <button onClick={() => handleMobileTabClick('litho')} disabled={!imageSrc} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'litho' && imageSrc ? 'text-blue-600' : 'text-gray-400'} ${!imageSrc ? 'opacity-40 cursor-not-allowed' : ''}`}><Box size={24}/><span className="text-[10px]">3D</span></button>
+                 <button onClick={() => handleMobileTabClick('download')} disabled={!imageSrc} className={`flex flex-col items-center gap-0.5 p-1 w-14 transition-colors ${activeTab === 'download' && imageSrc ? 'text-blue-600' : 'text-gray-400'} ${!imageSrc ? 'opacity-40 cursor-not-allowed' : ''}`}><Download size={24}/><span className="text-[10px]">Save</span></button>
+             </div>
           </div>
       )}
-          
-      {/* Mobile Bottom Navigation (Crop Mode Only) - FIXED BOTTOM */}
+      
+      {/* Mobile Crop Bottom */}
       {step === 'crop' && (
            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shrink-0 z-50 pb-safe">
               {activeCropTab && (
                   <div className="border-b border-gray-100 p-3 bg-gray-50/95 backdrop-blur-xl max-h-[40vh] overflow-y-auto shadow-inner animate-in slide-in-from-bottom-10">
-                        <div className="flex justify-between items-center mb-3">
-                             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{activeCropTab} controls</span>
-                        </div>
-                        {renderMobileCropControls(activeCropTab)}
+                       {activeCropTab === 'shape' && (
+                           <div className="space-y-4">
+                               <div className="text-[10px] uppercase font-bold text-gray-400 mb-3 tracking-wider">Frame Shape</div>
+                               <div className="flex gap-3">
+                                   <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'circle'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border ${liveCrop.frameShape === 'circle' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-200'}`}><Circle size={24} className="mb-2"/><span className="text-xs font-bold">Circle</span></button>
+                                   <button onClick={() => setLiveCrop(prev => ({...prev, frameShape: 'square'}))} className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border ${liveCrop.frameShape === 'square' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-gray-50 border-gray-200'}`}><Square size={24} className="mb-2"/><span className="text-xs font-bold">Square</span></button>
+                               </div>
+                               <Slider label="Zoom" value={liveCrop.scale} min={0.5} max={3.0} step={0.1} onChange={(v) => setLiveCrop(prev => ({...prev, scale: v}))} />
+                           </div>
+                       )}
                   </div>
               )}
               <div className="flex justify-between items-center h-16 p-3 bg-white">
                   <div className='flex gap-2'>
-                    <button onClick={() => handleMobileCropTabClick('shape')} className={`flex flex-col items-center justify-center gap-0.5 p-1 w-16 transition-colors rounded-xl hover:bg-gray-50 ${activeCropTab === 'shape' ? 'text-[#3B82F6]' : 'text-gray-400'}`} title="Shape" aria-label="Shape"><LayoutTemplate size={20}/><span className="text-[9px] font-medium">Shape</span></button>
+                    <button onClick={() => handleMobileCropTabClick('shape')} className={`flex flex-col items-center justify-center gap-0.5 p-1 w-16 transition-colors rounded-xl hover:bg-gray-50 ${activeCropTab === 'shape' ? 'text-[#3B82F6]' : 'text-gray-400'}`}><LayoutTemplate size={20}/><span className="text-[9px] font-medium">Shape</span></button>
                   </div>
-                  
                   <div className='flex gap-2'>
-                    <button onClick={resetView} className="flex flex-col items-center justify-center gap-0.5 p-1 w-16 transition-colors text-gray-400 hover:text-blue-500 rounded-xl hover:bg-gray-50" title="Reset" aria-label="Reset"><RotateCcw size={20}/><span className="text-[9px] font-medium">Reset</span></button>
-                    <button onClick={applyCropAndGoToEdit} className="w-24 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl font-bold flex items-center justify-center gap-1 shadow-md transition-all active:scale-95 text-xs" title="Apply" aria-label="Apply">Apply <Check size={16} /></button>
+                    <button onClick={resetView} className="flex flex-col items-center justify-center gap-0.5 p-1 w-16 transition-colors text-gray-400 hover:text-blue-500 rounded-xl hover:bg-gray-50"><RotateCcw size={20}/><span className="text-[9px] font-medium">Reset</span></button>
+                    <button onClick={applyCropAndGoToEdit} className="w-24 py-2 bg-[#3B82F6] hover:bg-[#2563EB] text-white rounded-xl font-bold flex items-center justify-center gap-1 shadow-md transition-all active:scale-95 text-xs">Apply <Check size={16} /></button>
                   </div>
               </div>
            </div>
       )}
-      </div>
-      
-      {/* SEO Footer */}
-      <footer className="sr-only">
-        <h2>IF Studio: Vector Art Generator | Halftone, Spiral & Dot Patterns</h2>
-        <p>Convert photos to custom vector art (SVG, PNG) for laser cutters, vinyl cutters, and 3D printing. Generate precise halftone, spiral, and stipple dot patterns, free and in your browser. Excellent tool for CNC art software and digital fabrication projects.</p>
-      </footer>
     </div>
   );
 }
