@@ -2,9 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon, Dice5, Monitor, Smartphone, GripHorizontal } from 'lucide-react';
 
 /**
- * IF Studio - Ultimate Version (v1.2)
-
- */
+ * IF Studio - Ultimate Version (v1.2) */
 
 // --- Constants ---
 const THEME_COLOR = '#3B82F6';
@@ -204,6 +202,34 @@ export default function App() {
   const lineThickness = modeSettings[mode]?.thickness || 0.5;
   const rotation = modeSettings[mode]?.rotation || 0;
   const dotShape = modeSettings[mode]?.dotShape || 'circle';
+
+  // --- SEO Implementation ---
+  useEffect(() => {
+    // 1. Update Document Title
+    document.title = "IF Studio | Free Vector Art, Halftone & Lithophane Generator";
+
+    // 2. Helper to set meta tags
+    const setMeta = (name, content, attribute = 'name') => {
+      let element = document.querySelector(`meta[${attribute}="${name}"]`);
+      if (!element) {
+        element = document.createElement('meta');
+        element.setAttribute(attribute, name);
+        document.head.appendChild(element);
+      }
+      element.setAttribute('content', content);
+    };
+
+    // 3. Set Standard Meta Tags
+    setMeta('description', "Transform images into spiral art, single-line vectors, halftone dots, and 3D lithophanes. The ultimate free tool for laser cutting, CNC, and 3D printing enthusiasts.");
+    setMeta('keywords', "vector art generator, halftone pattern, spiral art maker, lithophane stl generator, laser cutter templates, cnc software, svg converter, stipple generator, 3d print tools, insert fabrication");
+    
+    // 4. Set Open Graph (Social Sharing) Meta Tags
+    setMeta('og:title', "IF Studio - Precision Vector Art Engine", 'property');
+    setMeta('og:description', "Create spiral art, halftones, and lithophanes instantly in your browser. Free export to SVG/STL for makers.", 'property');
+    setMeta('og:type', "website", 'property');
+    setMeta('og:url', window.location.href, 'property');
+    // setMeta('og:image', 'https://your-domain.com/preview-image.jpg', 'property'); // Add your own image URL here
+  }, []);
 
   const updateSetting = useCallback((key, value) => {
       if (['widthMm', 'minDepth', 'maxDepth', 'resolution'].includes(key)) setModeSettings(prev => ({ ...prev, litho: { ...prev.litho, [key]: value } }));
