@@ -1,12 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon, Dice5, Monitor, Smartphone, GripHorizontal, Undo2, Redo2 } from 'lucide-react';
+import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon, Dice5, Monitor, Smartphone, GripHorizontal } from 'lucide-react';
 
 /**
- * IF Studio - Ultimate Version (v5.0)
- * Features:
- * 1. Web Worker Offloading: STL & SVG generation runs in a background thread to prevent UI freezing.
- * 2. Undo/Redo History: Tracks settings and crop changes with smart snapshots.
- * 3. Performance: Optimized rendering and export pipeline.
+ * IF Studio - Ultimate Version (v1.4 - SEO Edition)
+ * - Added: Auto-injection of SEO Meta Tags (Description, Keywords, Open Graph).
+ * - Added: Rich SEO Footer content.
+ * - Preserved: All previous mobile/desktop fixes.
  */
 
 // --- Constants ---
@@ -17,130 +16,6 @@ const DEFAULT_MIN_THICKNESS = 0.32;
 const CMYK_ANGLES = { c: 15, m: 75, y: 0, k: 45 };
 const CMYK_COLORS = { c: '#00FFFF', m: '#FF00FF', y: '#FFFF00', k: '#000000' };
 const MOBILE_NAV_HEIGHT = 64; 
-
-// --- WORKER SCRIPT (Inline for portability) ---
-const WORKER_CODE = `
-self.onmessage = function(e) {
-  const { type, payload } = e.data;
-  
-  if (type === 'GENERATE_STL') {
-    try {
-      const { imgData, width, height, settings, frameShape, cropAspect } = payload;
-      const { minDepth, maxDepth, widthMm, resolution } = settings;
-      
-      const maxCropDim = Math.min(width, height);
-      const centerX = width / 2;
-      const centerY = height / 2;
-      let cropW, cropH;
-      
-      // Determine Crop Bounds
-      let currentAspect = 1.0;
-      if (frameShape === 'custom') currentAspect = cropAspect;
-      
-      if (frameShape === 'circle' || frameShape === 'square') { 
-        cropW = maxCropDim; cropH = maxCropDim; 
-      } else { 
-        const baseDim = maxCropDim;
-        if (currentAspect >= 1) { cropW = baseDim; cropH = baseDim / currentAspect; }
-        else { cropH = baseDim; cropW = baseDim * currentAspect; }
-      }
-      
-      const maxRes = 1000 * resolution;
-      const scaleFactor = Math.min(1, maxRes / Math.max(cropW, cropH));
-      const meshW = Math.floor(cropW * scaleFactor);
-      const meshH = Math.floor(cropH * scaleFactor);
-      const halfW = meshW / 2;
-      const halfH = meshH / 2;
-
-      // Resample Image Data to Mesh Grid (Nearest Neighbor for speed in worker)
-      // Note: In a real app, passing a resized buffer is better, but here we sample the full buffer.
-      const getSourcePixel = (mx, my) => {
-         // Map mesh coord (mx, my) to source coord
-         const sx = centerX - (cropW/2) + (mx / scaleFactor);
-         const sy = centerY - (cropH/2) + (my / scaleFactor);
-         const ix = Math.floor(sx);
-         const iy = Math.floor(sy);
-         if(ix < 0 || ix >= width || iy < 0 || iy >= height) return 0; // Transparent/Black
-         const idx = (iy * width + ix) * 4;
-         // Alpha check
-         if(imgData[idx+3] < 10) return 0;
-         // Luma
-         return (imgData[idx] + imgData[idx+1] + imgData[idx+2]) / 3;
-      };
-
-      const isInside = (x, y) => {
-          if (frameShape !== 'circle') return true;
-          const dx = x - halfW;
-          const dy = y - halfH;
-          return (dx*dx + dy*dy) <= (Math.min(halfW, halfH))**2; 
-      };
-
-      // Count Valid Quads
-      let validQuads = 0;
-      for (let y = 0; y < meshH - 1; y++) {
-          for (let x = 0; x < meshW - 1; x++) {
-              if (isInside(x,y) && isInside(x+1,y) && isInside(x,y+1) && isInside(x+1,y+1)) {
-                  validQuads++;
-              }
-          }
-      }
-
-      const header = new Uint8Array(80);
-      const triCount = validQuads * 2;
-      const bufferSize = 84 + (50 * triCount);
-      const buffer = new ArrayBuffer(bufferSize);
-      const view = new DataView(buffer);
-      
-      // Write Header
-      view.setUint32(80, triCount, true);
-      let offset = 84;
-      
-      const pxSize = widthMm / meshW;
-      
-      const getZ = (val) => minDepth + ((1 - (val/255)) * (maxDepth - minDepth));
-
-      for (let y = 0; y < meshH - 1; y++) {
-         for (let x = 0; x < meshW - 1; x++) {
-             if (!isInside(x,y) || !isInside(x+1,y) || !isInside(x,y+1) || !isInside(x+1,y+1)) continue;
-
-             const v00 = getSourcePixel(x, y);
-             const v10 = getSourcePixel(x+1, y);
-             const v01 = getSourcePixel(x, y+1);
-             const v11 = getSourcePixel(x+1, y+1);
-
-             // Skip fully transparent quads if desired, but here we treat 0 as max height or min height depending on logic
-             // If getSourcePixel returns 0 due to transparency, z is maxDepth.
-             
-             const z00 = getZ(v00); const z10 = getZ(v10);
-             const z01 = getZ(v01); const z11 = getZ(v11);
-
-             const x0 = x*pxSize; const y0 = y*pxSize;
-             const x1 = (x+1)*pxSize; const y1 = (y+1)*pxSize;
-
-             // Triangle 1
-             view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
-             view.setFloat32(offset+12, x0, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z00, true);
-             view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true);
-             view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
-             view.setUint16(offset+48, 0, true); offset += 50;
-
-             // Triangle 2
-             view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
-             view.setFloat32(offset+12, x1, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z10, true);
-             view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true);
-             view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
-             view.setUint16(offset+48, 0, true); offset += 50;
-         }
-      }
-      
-      self.postMessage({ type: 'STL_READY', buffer: buffer }, [buffer]);
-    
-    } catch(err) {
-      self.postMessage({ type: 'ERROR', message: err.message });
-    }
-  }
-};
-`;
 
 // --- Helper Components ---
 
@@ -153,8 +28,7 @@ const Tooltip = memo(({ text }) => (
   </div>
 ));
 
-// Modified Slider with onCommit for Undo/Redo
-const Slider = memo(({ label, value, min, max, step, onChange, onCommit, icon: Icon, highlight, tooltip, onReset, resetValue, settingKey }) => (
+const Slider = memo(({ label, value, min, max, step, onChange, icon: Icon, highlight, tooltip, onReset, resetValue, settingKey }) => (
   <div className="mb-3 md:mb-5 group">
     <div className="flex justify-between items-center mb-1">
       <label className={`flex items-center gap-1.5 text-xs md:text-sm font-semibold ${highlight ? 'text-blue-600' : 'text-gray-600'}`}>
@@ -162,20 +36,15 @@ const Slider = memo(({ label, value, min, max, step, onChange, onCommit, icon: I
         {label}
         {tooltip && <Tooltip text={tooltip} />}
         {onReset && (
-            <button onClick={() => { onReset(settingKey, resetValue); if(onCommit) onCommit(); }} className="p-0.5 ml-1 rounded-full text-gray-300 hover:text-blue-500 transition-colors duration-150 transform hover:rotate-180 disabled:opacity-0" disabled={value === resetValue} title="Reset">
+            <button onClick={() => onReset(settingKey, resetValue)} className="p-0.5 ml-1 rounded-full text-gray-300 hover:text-blue-500 transition-colors duration-150 transform hover:rotate-180 disabled:opacity-0" disabled={value === resetValue} title="Reset">
                 <RotateCcw size={12} />
             </button>
         )}
       </label>
-      <input type="number" value={typeof value === 'number' ? (Number.isInteger(step) ? value : value.toFixed(2)) : value} onChange={(e) => { const val = parseFloat(e.target.value); if (!isNaN(val)) onChange(val); }} onBlur={onCommit} step={step} className="text-[10px] md:text-xs text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200 w-16 text-right focus:ring-1 focus:ring-blue-300 outline-none" />
+      <input type="number" value={typeof value === 'number' ? (Number.isInteger(step) ? value : value.toFixed(2)) : value} onChange={(e) => { const val = parseFloat(e.target.value); if (!isNaN(val)) onChange(val); }} step={step} className="text-[10px] md:text-xs text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200 w-16 text-right focus:ring-1 focus:ring-blue-300 outline-none" />
     </div>
     <div className="relative h-5 md:h-6 flex items-center">
-      <input type="range" min={min} max={max} step={step} value={value} 
-        onChange={(e) => onChange(parseFloat(e.target.value))} 
-        onMouseUp={onCommit} 
-        onTouchEnd={onCommit}
-        className="absolute w-full h-1.5 md:h-2 bg-gray-200 rounded-full appearance-none cursor-pointer transition-all duration-100 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 z-10" 
-        style={{ backgroundImage: `linear-gradient(${THEME_COLOR}, ${THEME_COLOR})`, backgroundSize: `${((value - min) * 100) / (max - min)}% 100%`, backgroundRepeat: 'no-repeat' }} />
+      <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="absolute w-full h-1.5 md:h-2 bg-gray-200 rounded-full appearance-none cursor-pointer transition-all duration-100 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 z-10" style={{ backgroundImage: `linear-gradient(${THEME_COLOR}, ${THEME_COLOR})`, backgroundSize: `${((value - min) * 100) / (max - min)}% 100%`, backgroundRepeat: 'no-repeat' }} />
       <style>{`input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #ffffff; border: 3px solid #3B82F6; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.1s ease-out; margin-top: 0px; } input[type=range]::-webkit-slider-thumb:active { transform: scale(1.1); }`}</style>
     </div>
   </div>
@@ -236,16 +105,22 @@ const AboutModal = memo(({ isOpen, onClose }) => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 animate-in fade-in duration-200">
            <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto shadow-2xl flex flex-col relative animate-in zoom-in-95 duration-200">
              <button onClick={onClose} className="absolute top-3 right-3 p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors text-gray-500" title="Close"><X size={18}/></button>
+             
              <div className="p-6 md:p-8 space-y-5">
+                {/* Header */}
                 <div className="text-center space-y-2">
                     <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-200"><Activity className="text-white" size={20}/></div>
                     <h2 className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">IF Studio <span className="text-gray-400 text-base font-normal block mt-1">(Insert Fabrication)</span></h2>
                     <p className="text-sm text-gray-500 font-medium">Precision Vector Art Engine for Makers & Fabrication</p>
                 </div>
+
+                {/* Description */}
                 <div className="space-y-3 text-xs md:text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
                     <p>Built for makers, designers, and anyone who wants fast visual effects without complicated software. Generate spiral art, halftone patterns, and other experimental styles in just a few steps.</p>
                     <div className="p-3 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-semibold text-center border border-emerald-100">All downloads are free for both personal and commercial use.</div>
                 </div>
+
+                {/* What it offers */}
                 <div className="space-y-2">
                     <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2"><Settings size={14} className="text-blue-500"/> What this platform offers</h3>
                     <ul className="text-xs text-gray-600 space-y-1.5 list-disc pl-4 marker:text-blue-300">
@@ -255,10 +130,14 @@ const AboutModal = memo(({ isOpen, onClose }) => {
                         <li>Works directly in your browser, no signup required</li>
                     </ul>
                 </div>
+
+                {/* Who it's for */}
                 <div className="space-y-2">
                     <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2"><Hand size={14} className="text-purple-500"/> Who it’s for</h3>
                     <p className="text-xs text-gray-600 leading-relaxed">People who enjoy creating. Whether you're running a workshop, crafting at home, or experimenting with digital art, IF Studio keeps the process simple.</p>
                 </div>
+
+                {/* Footer / Contact */}
                 <div className="pt-4 border-t border-gray-100 text-center space-y-1">
                     <p className="text-[10px] text-gray-400">Designed and maintained by IF Studio as an independent creative project.</p>
                     <p className="text-[10px] text-gray-400">Every feature is built with the goal of helping makers turn ideas into visuals quickly.</p>
@@ -314,81 +193,6 @@ export default function App() {
   const [colorMode, setColorMode] = useState('mono');
   const [activeLayers, setActiveLayers] = useState({ c: true, m: true, y: true, k: true });
   
-  // --- UNDO/REDO SYSTEM ---
-  const [history, setHistory] = useState([]);
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  const isUndoRedoAction = useRef(false);
-
-  // Capture state snapshot
-  const getCurrentState = () => ({
-      modeSettings: JSON.parse(JSON.stringify(modeSettings)),
-      liveCrop: { ...liveCrop },
-      scale, panX, panY, centerHole, borderWidth, contrast, brightness, invert, fgColor,
-      mode, colorMode, activeLayers, cropAspectW, cropAspectH
-  });
-
-  // Save to history (Debounced or on commit)
-  const saveToHistory = useCallback(() => {
-      if (isUndoRedoAction.current) return;
-      const newState = getCurrentState();
-      
-      // Prevent duplicates
-      if (historyIndex >= 0) {
-          const currentStateStr = JSON.stringify(history[historyIndex]);
-          if (JSON.stringify(newState) === currentStateStr) return;
-      }
-
-      const newHistory = history.slice(0, historyIndex + 1);
-      newHistory.push(newState);
-      // Limit history size
-      if (newHistory.length > 20) newHistory.shift();
-      
-      setHistory(newHistory);
-      setHistoryIndex(newHistory.length - 1);
-      console.log("State Saved", newHistory.length);
-  }, [history, historyIndex, modeSettings, liveCrop, scale, panX, panY, contrast, brightness, mode]);
-
-  // Initial Save
-  useEffect(() => {
-      if (history.length === 0 && imageSrc) saveToHistory();
-  }, [imageSrc]);
-
-  const handleUndo = () => {
-      if (historyIndex > 0) {
-          isUndoRedoAction.current = true;
-          const prevIndex = historyIndex - 1;
-          const state = history[prevIndex];
-          restoreState(state);
-          setHistoryIndex(prevIndex);
-          setTimeout(() => { isUndoRedoAction.current = false; }, 100);
-          showToast("Undo", "info");
-      }
-  };
-
-  const handleRedo = () => {
-      if (historyIndex < history.length - 1) {
-          isUndoRedoAction.current = true;
-          const nextIndex = historyIndex + 1;
-          const state = history[nextIndex];
-          restoreState(state);
-          setHistoryIndex(nextIndex);
-          setTimeout(() => { isUndoRedoAction.current = false; }, 100);
-          showToast("Redo", "info");
-      }
-  };
-
-  const restoreState = (state) => {
-      setModeSettings(state.modeSettings);
-      setLiveCrop(state.liveCrop);
-      setScale(state.scale); setPanX(state.panX); setPanY(state.panY);
-      setCenterHole(state.centerHole); setBorderWidth(state.borderWidth);
-      setContrast(state.contrast); setBrightness(state.brightness);
-      setInvert(state.invert); setFgColor(state.fgColor);
-      setMode(state.mode); setColorMode(state.colorMode); setActiveLayers(state.activeLayers);
-      setCropAspectW(state.cropAspectW); setCropAspectH(state.cropAspectH);
-  };
-  // ------------------------
-
   const labelMap = {
     spiral: { density: "Rings", thickness: "Stroke Width", densityTooltip: "Number of continuous rings.", thicknessTooltip: "Controls thickness." },
     lines: { density: "Lines/mm", thickness: "Line Width", densityTooltip: "Number of parallel lines.", thicknessTooltip: "Controls thickness." },
@@ -405,7 +209,10 @@ export default function App() {
 
   // --- SEO Implementation ---
   useEffect(() => {
+    // 1. Update Document Title
     document.title = "IF Studio | Free Vector Art, Halftone & Lithophane Generator";
+
+    // 2. Helper to set meta tags
     const setMeta = (name, content, attribute = 'name') => {
       let element = document.querySelector(`meta[${attribute}="${name}"]`);
       if (!element) {
@@ -415,34 +222,17 @@ export default function App() {
       }
       element.setAttribute('content', content);
     };
+
+    // 3. Set Standard Meta Tags
     setMeta('description', "Transform images into spiral art, single-line vectors, halftone dots, and 3D lithophanes. The ultimate free tool for laser cutting, CNC, and 3D printing enthusiasts.");
     setMeta('keywords', "vector art generator, halftone pattern, spiral art maker, lithophane stl generator, laser cutter templates, cnc software, svg converter, stipple generator, 3d print tools, insert fabrication");
+    
+    // 4. Set Open Graph (Social Sharing) Meta Tags
     setMeta('og:title', "IF Studio - Precision Vector Art Engine", 'property');
     setMeta('og:description', "Create spiral art, halftones, and lithophanes instantly in your browser. Free export to SVG/STL for makers.", 'property');
     setMeta('og:type', "website", 'property');
     setMeta('og:url', window.location.href, 'property');
-  }, []);
-
-  // --- WORKER SETUP ---
-  const workerRef = useRef(null);
-  useEffect(() => {
-      const blob = new Blob([WORKER_CODE], { type: 'application/javascript' });
-      workerRef.current = new Worker(URL.createObjectURL(blob));
-      workerRef.current.onmessage = (e) => {
-          if (e.data.type === 'STL_READY') {
-              const blob = new Blob([e.data.buffer], { type: 'application/octet-stream' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a'); link.href = url; link.download = `if-studio-litho-${Date.now()}.stl`; link.click();
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-              showToast("STL Generated!", 'success');
-              setIsProcessing(false);
-          } else if (e.data.type === 'ERROR') {
-              console.error(e.data.message);
-              showToast("Worker Error", 'error');
-              setIsProcessing(false);
-          }
-      };
-      return () => workerRef.current?.terminate();
+    // setMeta('og:image', 'https://your-domain.com/preview-image.jpg', 'property'); // Add your own image URL here
   }, []);
 
   const updateSetting = useCallback((key, value) => {
@@ -458,9 +248,8 @@ export default function App() {
       const rMode = modes[Math.floor(Math.random() * modes.length)];
       setMode(rMode);
       setModeSettings(prev => ({ ...prev, [rMode]: { ...prev[rMode], rings: rRings, thickness: rThick, rotation: rRot } }));
-      saveToHistory(); // Save on random
       showToast("Randomized Settings!", 'success');
-  }, [saveToHistory]);
+  }, []);
     
   const [is3DMode, setIs3DMode] = useState(false);
   const [minThickness, setMinThickness] = useState(DEFAULT_MIN_THICKNESS);
@@ -503,9 +292,8 @@ export default function App() {
       setLiveCrop({ scale: 1, panX: 50, panY: 50, frameShape: 'circle' });
       setCropAspectW(16); setCropAspectH(9); setFrameShape('circle');
       setEditView({ scale: 1, x: 0, y: 0 });
-      saveToHistory();
       showToast("View Reset");
-  }, [saveToHistory]);
+  }, []);
 
   const handleFitToScreen = useCallback(() => {
       setEditView({ scale: 1, x: 0, y: 0 });
@@ -516,16 +304,14 @@ export default function App() {
       if (activeTab === 'litho') {
           updateSetting('widthMm', 100); updateSetting('minDepth', 0.8);
           updateSetting('maxDepth', 3.0); updateSetting('resolution', 0.5);
-          showToast("Litho Reset"); 
-      } else {
-        updateSetting('rings', DEFAULT_PATTERN_SETTINGS.rings);
-        updateSetting('thickness', DEFAULT_PATTERN_SETTINGS.thickness);
-        updateSetting('rotation', DEFAULT_PATTERN_SETTINGS.rotation);
-        if (mode === 'dots') updateSetting('dotShape', DEFAULT_PATTERN_SETTINGS.dotShape);
-        showToast("Pattern Reset");
+          showToast("Litho Reset"); return;
       }
-      saveToHistory();
-  }, [activeTab, mode, updateSetting, saveToHistory]);
+      updateSetting('rings', DEFAULT_PATTERN_SETTINGS.rings);
+      updateSetting('thickness', DEFAULT_PATTERN_SETTINGS.thickness);
+      updateSetting('rotation', DEFAULT_PATTERN_SETTINGS.rotation);
+      if (mode === 'dots') updateSetting('dotShape', DEFAULT_PATTERN_SETTINGS.dotShape);
+      showToast("Pattern Reset");
+  }, [activeTab, mode, updateSetting]);
 
   const handleSliderReset = useCallback((key, def) => {
     if (key === 'minThickness') setMinThickness(DEFAULT_MIN_THICKNESS);
@@ -534,19 +320,14 @@ export default function App() {
     else if (key === 'brightness') setBrightness(0);
     else if (key === 'borderWidth') setBorderWidth(0);
     else updateSetting(key, def);
-    saveToHistory();
     showToast(`${key} reset.`);
-  }, [updateSetting, saveToHistory]);
+  }, [updateSetting]);
 
   const handleModeChange = useCallback((newMode) => {
       if (mode === newMode) return;
       setIsProcessing(true);
-      setTimeout(() => { 
-          setMode(newMode); 
-          saveToHistory();
-          setTimeout(() => setIsProcessing(false), 500); 
-      }, 50);
-  }, [mode, saveToHistory]);
+      setTimeout(() => { setMode(newMode); setTimeout(() => setIsProcessing(false), 500); }, 50);
+  }, [mode]);
     
   const handleMobileTabClick = (tab) => { if (imageSrc) setActiveTab(prev => prev === tab ? null : tab); };
   const handleMobileCropTabClick = (tab) => setActiveCropTab(prev => prev === tab ? null : tab);
@@ -651,7 +432,7 @@ export default function App() {
     return () => container.removeEventListener('wheel', onWheel);
   }, [step]);
 
-  const handleEnd = () => { setIsDragging(false); lastPinchDist.current = null; saveToHistory(); };
+  const handleEnd = () => { setIsDragging(false); lastPinchDist.current = null; };
   const onDragOver = (e) => { e.preventDefault(); setIsDragOver(true); };
   const onDragLeave = (e) => { e.preventDefault(); setIsDragOver(false); };
   const onDrop = (e) => { e.preventDefault(); setIsDragOver(false); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); };
@@ -905,126 +686,6 @@ export default function App() {
     } catch(e) { console.error(e); showToast("Rendering error.", 'error'); }
   }, [step, scale, panX, panY, frameShape, liveCrop, cropAspectW, cropAspectH, mode, modeSettings, contrast, brightness, invert, colorMode, activeLayers, fgColor, borderWidth, centerHole, is3DMode, minThickness, lithoPreview, compareMode, editView, isDragging, rings, lineThickness, rotation, dotShape]);
 
-  // --- WORKER FOR HEAVY EXPORTS ---
-  const workerRef = useRef(null);
-  useEffect(() => {
-      // Inline Worker Script (Avoids external file dependency)
-      const workerCode = `
-      self.onmessage = function(e) {
-        if (e.data.type === 'GENERATE_STL') {
-          try {
-            const { imgData, width, height, settings, frameShape, cropAspect } = e.data.payload;
-            const { minDepth, maxDepth, widthMm, resolution } = settings;
-            const maxCropDim = Math.min(width, height);
-            const centerX = width / 2, centerY = height / 2;
-            let cropW, cropH;
-            
-            // Determine Crop Bounds
-            let currentAspect = 1.0;
-            if (frameShape === 'custom') currentAspect = cropAspect;
-            
-            if (frameShape === 'circle' || frameShape === 'square') { 
-              cropW = maxCropDim; cropH = maxCropDim; 
-            } else { 
-              const baseDim = maxCropDim;
-              if (currentAspect >= 1) { cropW = baseDim; cropH = baseDim / currentAspect; }
-              else { cropH = baseDim; cropW = baseDim * currentAspect; }
-            }
-            
-            const maxRes = 1000 * resolution;
-            const scaleFactor = Math.min(1, maxRes / Math.max(cropW, cropH));
-            const meshW = Math.floor(cropW * scaleFactor);
-            const meshH = Math.floor(cropH * scaleFactor);
-            const halfW = meshW / 2, halfH = meshH / 2;
-
-            // Strict Crop Check inside Worker
-            const isInside = (x, y) => {
-                if (frameShape !== 'circle') return true;
-                const dx = x - halfW;
-                const dy = y - halfH;
-                return (dx*dx + dy*dy) <= (Math.min(halfW, halfH))**2; 
-            };
-
-            // Sample Source Pixel (Nearest Neighbor)
-            const getSourcePixel = (mx, my) => {
-               const sx = centerX - (cropW/2) + (mx / scaleFactor);
-               const sy = centerY - (cropH/2) + (my / scaleFactor);
-               const ix = Math.floor(sx), iy = Math.floor(sy);
-               if(ix < 0 || ix >= width || iy < 0 || iy >= height) return 0;
-               const idx = (iy * width + ix) * 4;
-               if(imgData[idx+3] < 10) return 0;
-               return (imgData[idx] + imgData[idx+1] + imgData[idx+2]) / 3;
-            };
-
-            // Count Quads
-            let validQuads = 0;
-            for (let y = 0; y < meshH - 1; y++) {
-                for (let x = 0; x < meshW - 1; x++) {
-                    if (isInside(x,y) && isInside(x+1,y) && isInside(x,y+1) && isInside(x+1,y+1)) validQuads++;
-                }
-            }
-
-            const header = new Uint8Array(80);
-            const triCount = validQuads * 2;
-            const bufferSize = 84 + (50 * triCount);
-            const buffer = new ArrayBuffer(bufferSize);
-            const view = new DataView(buffer);
-            
-            view.setUint32(80, triCount, true);
-            let offset = 84;
-            const pxSize = widthMm / meshW;
-            const getZ = (val) => minDepth + ((1 - (val/255)) * (maxDepth - minDepth));
-
-            for (let y = 0; y < meshH - 1; y++) {
-               for (let x = 0; x < meshW - 1; x++) {
-                   if (!isInside(x,y) || !isInside(x+1,y) || !isInside(x,y+1) || !isInside(x+1,y+1)) continue;
-
-                   const v00 = getSourcePixel(x, y), v10 = getSourcePixel(x+1, y), v01 = getSourcePixel(x, y+1), v11 = getSourcePixel(x+1, y+1);
-                   const z00 = getZ(v00), z10 = getZ(v10), z01 = getZ(v01), z11 = getZ(v11);
-
-                   const x0 = x*pxSize, y0 = y*pxSize, x1 = (x+1)*pxSize, y1 = (y+1)*pxSize;
-
-                   // Tri 1
-                   view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
-                   view.setFloat32(offset+12, x0, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z00, true);
-                   view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true);
-                   view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
-                   view.setUint16(offset+48, 0, true); offset += 50;
-
-                   // Tri 2
-                   view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
-                   view.setFloat32(offset+12, x1, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z10, true);
-                   view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true);
-                   view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
-                   view.setUint16(offset+48, 0, true); offset += 50;
-               }
-            }
-            self.postMessage({ type: 'STL_READY', buffer: buffer }, [buffer]);
-          } catch(err) {
-            self.postMessage({ type: 'ERROR', message: err.message });
-          }
-        }
-      };
-      `;
-      const blob = new Blob([workerCode], { type: 'application/javascript' });
-      workerRef.current = new Worker(URL.createObjectURL(blob));
-      workerRef.current.onmessage = (e) => {
-          if (e.data.type === 'STL_READY') {
-              const blob = new Blob([e.data.buffer], { type: 'application/octet-stream' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a'); link.href = url; link.download = `if-studio-litho-${Date.now()}.stl`; link.click();
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
-              showToast("STL Generated!", 'success');
-              setIsProcessing(false);
-          } else if (e.data.type === 'ERROR') {
-              console.error(e.data.message);
-              showToast("Worker Error", 'error');
-              setIsProcessing(false);
-          }
-      };
-      return () => workerRef.current?.terminate();
-  }, []);
-
   useEffect(() => {
     if (!imageSrc || !canvasRef.current) return;
     const isInteractive = step === 'crop' || (step === 'edit' && isDragging) || (step === 'edit' && editView.scale !== 1);
@@ -1042,26 +703,86 @@ export default function App() {
   }, [renderFrame, imageSrc, step, isDragging, editView]);
 
   const downloadSTL = useCallback(() => {
-      if (!sourceImageRef.current || !workerRef.current) return;
+      if (!sourceImageRef.current) return;
       setIsProcessing(true); showToast('Generating STL...', 'info');
-      
-      const refCanvas = canvasRef.current;
-      const baseCanvas = document.createElement('canvas');
-      baseCanvas.width = refCanvas.width; baseCanvas.height = refCanvas.height;
-      renderFrame(baseCanvas.getContext('2d'), baseCanvas.width, baseCanvas.height, true);
-      const imgData = baseCanvas.getContext('2d').getImageData(0,0,baseCanvas.width, baseCanvas.height);
+      setTimeout(() => {
+          try {
+              const refCanvas = canvasRef.current; const baseCanvas = document.createElement('canvas');
+              baseCanvas.width = refCanvas.width; baseCanvas.height = refCanvas.height;
+              renderFrame(baseCanvas.getContext('2d'), baseCanvas.width, baseCanvas.height, true);
+              
+              const w = baseCanvas.width, h = baseCanvas.height, maxCropDim = Math.min(w, h), centerX = w/2, centerY = h/2;
+              let cropW, cropH; let currentAspect = 1.0;
+              if (frameShape === 'custom') currentAspect = cropAspectW / cropAspectH;
+              if (frameShape === 'circle' || frameShape === 'square') { cropW = maxCropDim; cropH = maxCropDim; }
+              else { if (currentAspect >= 1) { cropW = maxCropDim; cropH = maxCropDim / currentAspect; } else { cropH = maxCropDim; cropW = maxCropDim * currentAspect; } }
+              const cropX = centerX - cropW / 2, cropY = centerY - cropH / 2;
+              
+              const maxRes = 1000 * modeSettings.litho.resolution, scaleFactor = Math.min(1, maxRes / Math.max(cropW, cropH));
+              const meshW = Math.floor(cropW * scaleFactor), meshH = Math.floor(cropH * scaleFactor);
+              const meshCanvas = document.createElement('canvas'); meshCanvas.width = meshW; meshCanvas.height = meshH;
+              meshCanvas.getContext('2d').drawImage(baseCanvas, cropX, cropY, cropW, cropH, 0, 0, meshW, meshH);
+              const imgData = meshCanvas.getContext('2d').getImageData(0, 0, meshW, meshH).data;
+              
+              // Calculate Triangles (Strict Crop Shape)
+              const baseDepth = modeSettings.litho.minDepth, maxDepth = modeSettings.litho.maxDepth, widthMm = modeSettings.litho.widthMm, pxSize = widthMm / meshW;
+              const halfW = meshW/2, halfH = meshH/2;
+              
+              const isInside = (x, y) => {
+                  const dx = x - halfW, dy = y - halfH;
+                  if (frameShape === 'circle') return (dx*dx + dy*dy) <= (Math.min(halfW, halfH))**2; // Strict circle
+                  return true; 
+              };
 
-      workerRef.current.postMessage({
-        type: 'GENERATE_STL',
-        payload: {
-            imgData: imgData,
-            width: baseCanvas.width,
-            height: baseCanvas.height,
-            settings: modeSettings.litho,
-            frameShape: frameShape,
-            cropAspect: cropAspectW / cropAspectH
-        }
-      });
+              let validQuads = 0;
+              for(let y=0; y<meshH-1; y++) {
+                  for(let x=0; x<meshW-1; x++) {
+                      // Check center point or all corners for rigorous inside check
+                      if(frameShape === 'circle') {
+                          const dx = x - halfW, dy = y - halfH;
+                          if ((dx*dx + dy*dy) > (Math.min(halfW, halfH))**2) continue;
+                      }
+                      validQuads++;
+                  }
+              }
+
+              const bufferSize = 84 + (50 * validQuads * 2);
+              const buffer = new ArrayBuffer(bufferSize), view = new DataView(buffer);
+              view.setUint32(80, validQuads * 2, true); // Header
+              let offset = 84; 
+
+              const getHeight = (x, y) => { const idx = (y * meshW + x) * 4; return imgData[idx+3] < 10 ? 0 : baseDepth + ((1 - (imgData[idx]+imgData[idx+1]+imgData[idx+2])/3/255) * (maxDepth - baseDepth)); };
+
+              for (let y = 0; y < meshH - 1; y++) {
+                 for (let x = 0; x < meshW - 1; x++) {
+                     if(frameShape === 'circle') {
+                          const dx = x - halfW, dy = y - halfH;
+                          if ((dx*dx + dy*dy) > (Math.min(halfW, halfH))**2) continue;
+                     }
+
+                     const x0 = x*pxSize, y0 = y*pxSize, x1 = (x+1)*pxSize, y1 = (y+1)*pxSize;
+                     const z00 = getHeight(x, y), z10 = getHeight(x+1, y), z01 = getHeight(x, y+1), z11 = getHeight(x+1, y+1);
+                     
+                     // Normal Calculation (Simplified Up)
+                     view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
+                     view.setFloat32(offset+12, x0, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z00, true);
+                     view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true);
+                     view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
+                     view.setUint16(offset+48, 0, true); offset += 50;
+
+                     view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true);
+                     view.setFloat32(offset+12, x1, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z10, true);
+                     view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true);
+                     view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
+                     view.setUint16(offset+48, 0, true); offset += 50;
+                 }
+              }
+              const blob = new Blob([buffer], { type: 'application/octet-stream' });
+              const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `if-studio-litho-${Date.now()}.stl`; link.click(); 
+              setTimeout(() => URL.revokeObjectURL(url), 1000); 
+              showToast("STL Generated!", 'success');
+          } catch(e) { console.error(e); showToast("Failed to generate STL.", 'error'); } finally { setIsProcessing(false); }
+      }, 100);
   }, [renderFrame, frameShape, cropAspectW, cropAspectH, modeSettings.litho]);
 
   const downloadSVG = useCallback(() => { 
