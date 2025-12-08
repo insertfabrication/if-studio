@@ -2,15 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from '
 import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon, Dice5, Monitor, Smartphone, GripHorizontal } from 'lucide-react';
 
 /**
- * IF Studio - Ultimate Version (v5.1 - Worker/UX Edition)
- * - Added: Undo/Redo History.
- * - Added: Local Storage AutoSave & Overwrite.
- * * --- NEW FEATURES (v5.1) ---
- * - FEATURE: Web Worker for SVG/STL Export (Non-blocking UI).
- * - FEATURE: Load Confirmation Modal for saved state.
- * - UX: Aggressive debouncing for pattern/tune parameter changes.
- * - UX: Keyboard shortcuts (Ctrl+O for Upload, Ctrl+Z/Y for Undo/Redo).
- * - UX: Undo/Redo button tooltips show action context.
+ * IF Studio - Ultimate Version (v1.5)
  */
 
 // --- Constants ---
