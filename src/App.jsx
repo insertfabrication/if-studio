@@ -49,6 +49,9 @@ const INITIAL_APP_STATE = {
     colorMode: 'mono', activeLayers: { c: true, m: true, y: true, k: true },
     is3DMode: false, minThickness: DEFAULT_MIN_THICKNESS,
     cropAspectW: 16, cropAspectH: 9,
+    // --- NEW STATE ---
+    preserveColor: false,
+    // --- END NEW STATE ---
 };
 
 
@@ -243,6 +246,9 @@ const useHistory = (initialState) => {
             minThickness: currentState.minThickness,
             cropAspectW: currentState.cropAspectW,
             cropAspectH: currentState.cropAspectH,
+            // --- NEW STATE ---
+            preserveColor: currentState.preserveColor,
+            // --- END NEW STATE ---
         };
     }, []);
 
@@ -362,6 +368,9 @@ export default function App() {
         minThickness, setMinThickness, 
         cropAspectW, setCropAspectW, 
         cropAspectH, setCropAspectH, 
+        // --- NEW STATE ---
+        preserveColor, setPreserveColor,
+        // --- END NEW STATE ---
         setState: setHistoryState,
         undo, redo, canUndo, canRedo, getUndoActionName, getRedoActionName,
         getCurrentState, // Exposed for saving
@@ -430,21 +439,21 @@ export default function App() {
         const settings = getCurrentState({
             mode, modeSettings, frameShape, scale, panX, panY, centerHole, borderWidth,
             contrast, brightness, invert, fgColor, colorMode, activeLayers, is3DMode,
-            minThickness, cropAspectW, cropAspectH
+            minThickness, cropAspectW, cropAspectH, preserveColor
         });
 
         saveTimeoutRef.current = setTimeout(() => {
             saveStateToLocalStorage(settings, imageSrc);
             console.log('Autosaved state to LocalStorage.');
         }, AUTOSAVE_DEBOUNCE_MS);
-    }, [mode, modeSettings, frameShape, scale, panX, panY, centerHole, borderWidth, contrast, brightness, invert, fgColor, colorMode, activeLayers, is3DMode, minThickness, cropAspectW, cropAspectH, imageSrc, getCurrentState, saveStateToLocalStorage]);
+    }, [mode, modeSettings, frameShape, scale, panX, panY, centerHole, borderWidth, contrast, brightness, invert, fgColor, colorMode, activeLayers, is3DMode, minThickness, cropAspectW, cropAspectH, preserveColor, imageSrc, getCurrentState, saveStateToLocalStorage]);
 
     // Effect to trigger save whenever settings change
     useEffect(() => {
         if (!imageSrc && step === 'upload') return; 
         triggerSave();
         return () => clearTimeout(saveTimeoutRef.current);
-    }, [mode, modeSettings, frameShape, scale, panX, panY, centerHole, borderWidth, contrast, brightness, invert, fgColor, colorMode, activeLayers, is3DMode, minThickness, cropAspectW, cropAspectH, imageSrc, step, triggerSave]);
+    }, [mode, modeSettings, frameShape, scale, panX, panY, centerHole, borderWidth, contrast, brightness, invert, fgColor, colorMode, activeLayers, is3DMode, minThickness, cropAspectW, cropAspectH, preserveColor, imageSrc, step, triggerSave]);
 
 
     // --- Load State Logic ---
@@ -899,6 +908,8 @@ export default function App() {
                                        if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
                                        const idx = (iy * w + ix) * 4;
                                        if (sourceData[idx+3] === 0) continue;
+                                       
+                                       // Grayscale calculation for flow mode logic
                                        const getL = (idx) => 0.299*(sourceData[idx]/255) + 0.587*(sourceData[idx+1]/255) + 0.114*(sourceData[idx+2]/255);
                                        const luma = getL(idx);
                                        const val = (luma - 0.5) * contrast + 0.5 + (brightness/255);
@@ -924,25 +935,49 @@ export default function App() {
                                        if (distSq < holeRadiusSq) { data[index+3] = 0; continue; }
                                        
                                        let r = sourceData[index]/255, g = sourceData[index+1]/255, b = sourceData[index+2]/255;
+                                       
+                                       // Apply Contrast/Brightness
+                                       r = Math.min(1, Math.max(0, ((r-0.5)*contrast+0.5)+(brightness/255)));
+                                       g = Math.min(1, Math.max(0, ((g-0.5)*contrast+0.5)+(brightness/255)));
+                                       b = Math.min(1, Math.max(0, ((b-0.5)*contrast+0.5)+(brightness/255)));
+
                                        let val = 1.0;
-                                       if (isMono) {
-                                           let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
-                                           luma += brightness; luma = (luma - 128) * contrast + 128;
-                                           if (luma < 0) luma = 0; if (luma > 255) luma = 255;
-                                           val = luma / 255;
-                                           if (invert) val = 1.0 - val;
-                                           if (mode === 'photo') { data[index] = val*255; data[index+1] = val*255; data[index+2] = val*255; data[index+3] = 255; continue; }
+                                       
+                                       if (mode === 'photo' || preserveColor) {
+                                            // 1. Photo Mode or Preserve Color is ON (Raster Output)
+                                            let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
+                                            val = luma / 255;
+                                            if (invert) val = 1.0 - val;
+                                            
+                                            if (mode === 'photo') { 
+                                                 // Simple grayscale for photo mode
+                                                 data[index] = val*255; data[index+1] = val*255; data[index+2] = val*255; data[index+3] = 255; continue; 
+                                            } else {
+                                                 // Preserve Color Mode: Just use the adjusted RGB values for the mask calculation below
+                                            }
+                                       } else if (isMono) {
+                                           // 2. Mono Vector Mode (Standard Grayscale)
+                                            let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
+                                            val = luma / 255;
+                                            if (invert) val = 1.0 - val;
                                        } else {
-                                            r = Math.min(1, Math.max(0, ((r-0.5)*contrast+0.5)+(brightness/255)));
-                                            g = Math.min(1, Math.max(0, ((g-0.5)*contrast+0.5)+(brightness/255)));
-                                            b = Math.min(1, Math.max(0, ((b-0.5)*contrast+0.5)+(brightness/255)));
+                                           // 3. CMYK Mode (Color Separation)
                                             let k = 1 - Math.max(r, g, b);
                                             if (layer.key === 'c') val = 1 - ((1 - r - k) / (1 - k) || 0);
                                             if (layer.key === 'm') val = 1 - ((1 - g - k) / (1 - k) || 0);
                                             if (layer.key === 'y') val = 1 - ((1 - b - k) / (1 - k) || 0);
                                             if (layer.key === 'k') val = 1 - k;
                                        }
+
                                        let isForeground = false;
+                                       
+                                       if (preserveColor && !isMono) {
+                                            // Special case: If preserving color, the pattern mask is calculated from intensity, but the final output should use the adjusted color (r, g, b)
+                                            let lumaForMask = 0.299 * r + 0.587 * g + 0.114 * b;
+                                            val = lumaForMask; // Base pattern calculation on grayscale intensity
+                                            if (invert) val = 1.0 - val;
+                                       }
+
                                        if (mode === 'spiral') {
                                             const dist = Math.sqrt(distSq);
                                             const angle = Math.atan2(dy, dx) + radRotation;
@@ -979,14 +1014,27 @@ export default function App() {
                                                  if (dome > cutoff) isForeground = true;
                                             }
                                        }
-                                       if (isForeground) { data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255; } 
+                                       
+                                       if (isForeground) { 
+                                            if (preserveColor && !isMono && colorMode !== 'cmyk') {
+                                                 // When preserving color, use the pixel's adjusted color
+                                                 data[index] = r*255; data[index+1] = g*255; data[index+2] = b*255; data[index+3] = 255; 
+                                            } else {
+                                                 // Otherwise use the layer's color (fgColor for mono, CMYK color for CMYK mode)
+                                                 data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255; 
+                                            }
+                                       } 
                                        else if (isExport) { data[index+3] = 0; } // Ensure transparency for background when exporting
                                }
                            }
                            const layerCanvas = document.createElement('canvas');
                            layerCanvas.width = w; layerCanvas.height = h;
                            layerCanvas.getContext('2d').putImageData(layerImgData, 0, 0);
-                           if (colorMode === 'mono' || i === 0) oCtx.globalCompositeOperation = 'source-over'; else oCtx.globalCompositeOperation = 'multiply'; 
+                           
+                           // Note on Composition: We still use 'source-over' for mono/photo and 'multiply' for CMYK.
+                           if (colorMode === 'mono' || i === 0 || preserveColor) oCtx.globalCompositeOperation = 'source-over'; 
+                           else oCtx.globalCompositeOperation = 'multiply'; 
+                           
                            oCtx.drawImage(layerCanvas, 0, 0);
                            oCtx.globalCompositeOperation = 'source-over';
                        }
@@ -1021,7 +1069,7 @@ export default function App() {
             if (isExport) ctx.drawImage(outputCanvas, 0, 0);
             else { ctx.save(); ctx.translate(w/2, h/2); ctx.scale(editView.scale, editView.scale); ctx.translate(editView.x, editView.y); ctx.translate(-w/2, -h/2); ctx.drawImage(outputCanvas, 0, 0); ctx.restore(); }
         } catch(e) { console.error(e); showToast("Rendering error.", 'error'); }
-    }, [step, scale, panX, panY, frameShape, liveCrop, cropAspectW, cropAspectH, mode, modeSettings, contrast, brightness, invert, colorMode, activeLayers, fgColor, borderWidth, centerHole, is3DMode, minThickness, lithoPreview, compareMode, editView, isDragging, rings, lineThickness, rotation, dotShape]);
+    }, [step, scale, panX, panY, frameShape, liveCrop, cropAspectW, cropAspectH, mode, modeSettings, contrast, brightness, invert, colorMode, activeLayers, fgColor, borderWidth, centerHole, is3DMode, minThickness, lithoPreview, compareMode, editView, isDragging, rings, lineThickness, rotation, dotShape, preserveColor]);
 
     useEffect(() => {
         if (!imageSrc || !canvasRef.current) return;
@@ -1043,6 +1091,7 @@ export default function App() {
     // --- Export Logic using Web Worker ---
     const worker = useMemo(() => {
         // Basic Worker Script for SVG/STL calculation
+        // NOTE: The worker is created as a URL blob and contains all necessary constants and functions
         const workerScript = `
             const hexToRgb = (hex) => {
                 const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex);
@@ -1051,7 +1100,7 @@ export default function App() {
             
             self.onmessage = (e) => {
                 const { type, data, config } = e.data;
-                const { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings } = config;
+                const { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings, preserveColor } = config; // Added preserveColor
                 
                 const imageData = new ImageData(new Uint8ClampedArray(data), w, h);
                 const sourceData = imageData.data;
@@ -1068,7 +1117,7 @@ export default function App() {
                 const CMYK_COLORS = { c: '#00FFFF', m: '#FF00FF', y: '#FFFF00', k: '#000000' };
                 const CMYK_ANGLES = { c: 15, m: 75, y: 0, k: 45 };
 
-
+                // Get Grayscale/CMYK value based on mode/color settings
                 const getVal = (x, y, rot, key) => {
                     const ix = Math.floor(x), iy = Math.floor(y); if (ix < 0 || ix >= w || iy < 0 || iy >= h) return 1;
                     const idx = (iy * w + ix) * 4; if (sourceData[idx + 3] === 0) return 1;
@@ -1083,85 +1132,118 @@ export default function App() {
                     g = Math.min(1, Math.max(0, ((g-0.5)*contrast+0.5)+(brightness/255)));
                     b = Math.min(1, Math.max(0, ((b-0.5)*contrast+0.5)+(brightness/255)));
 
-                    if (colorMode === 'mono') { 
+                    if (preserveColor && colorMode === 'mono') {
+                        // For vector tracing, use luma even if preserving color for pattern intensity
+                        let l = 0.299 * r + 0.587 * g + 0.114 * b;
+                        val = Math.min(1, Math.max(0, l));
+                        if (invert) val = 1 - val;
+                    } else if (colorMode === 'mono') { 
+                        // Grayscale Luma for Mono vector
                         let l = 0.299 * r + 0.587 * g + 0.114 * b;
                         val = Math.min(1, Math.max(0, l)); 
                         if (invert) val = 1 - val; 
                     } else { 
+                        // CMYK separation for CMYK vector
                         let k = 1 - Math.max(r, g, b); 
                         if (key === 'c') val = 1 - ((1 - r - k) / (1 - k) || 0); 
                         if (key === 'm') val = 1 - ((1 - g - k) / (1 - k) || 0); 
                         if (key === 'y') val = 1 - ((1 - b - k) / (1 - k) || 0); 
                         if (key === 'k') val = 1 - k; 
-                        // CMYK images are typically inverted (darker = more ink = lower value)
-                        val = 1 - val; 
+                        val = 1 - val; // Invert for darkness = size
                     }
                     return val;
                 };
 
+                // Get the adjusted RGB color for preserveColor mode
+                const getAdjustedColor = (x, y) => {
+                    const idx = (Math.floor(y) * w + Math.floor(x)) * 4;
+                    let r = sourceData[idx] / 255, g = sourceData[idx + 1] / 255, b = sourceData[idx + 2] / 255;
+                    r = Math.min(1, Math.max(0, ((r-0.5)*contrast+0.5)+(brightness/255)));
+                    g = Math.min(1, Math.max(0, ((g-0.5)*contrast+0.5)+(brightness/255)));
+                    b = Math.min(1, Math.max(0, ((b-0.5)*contrast+0.5)+(brightness/255)));
+                    
+                    const toHex = (c) => Math.min(255, Math.max(0, Math.floor(c * 255))).toString(16).padStart(2, '0');
+                    return \`#\${toHex(r)}\${toHex(g)}\${toHex(b)}\`;
+                }
+
+
                 if (type === 'svg') {
                     let svgBody = "";
                     let layersToExport = [];
-                    if (colorMode === 'cmyk') {
+                    if (colorMode === 'cmyk' && !preserveColor) {
                         if(activeLayers.c) layersToExport.push({key:'c',name:'Cyan',color:CMYK_COLORS.c,angle:CMYK_ANGLES.c});
                         if(activeLayers.m) layersToExport.push({key:'m',name:'Magenta',color:CMYK_COLORS.m,angle:CMYK_ANGLES.m});
                         if(activeLayers.y) layersToExport.push({key:'y',name:'Yellow',color:CMYK_COLORS.y,angle:CMYK_ANGLES.y});
                         if(activeLayers.k) layersToExport.push({key:'k',name:'Key',color:CMYK_COLORS.k,angle:CMYK_ANGLES.k});
-                    } else layersToExport.push({key:'mono',name:'Layer_1',color:fgColor,angle:0});
+                    } else {
+                        // For Mono or Preserve Color, treat as a single layer
+                         layersToExport.push({key:'mono',name:'Layer_1',color:fgColor,angle:0});
+                    }
 
                     layersToExport.forEach(layer => {
                         let paths = []; const totalRot = rotation + layer.angle, radRot = totalRot * PI / 180;
                         
-                        // Simplified function to add geometric dots/lines/spirals... (Large block removed for brevity)
-                        // The core logic is to use the grayscale value (val) to control size or thickness.
                         if (mode === 'spiral') {
-                             // SVG Spiral Path Generation Logic (similar to renderFrame, but generating SVG path strings)
                              const spacing = (maxCropDim/2)/effectiveRings, maxTheta = effectiveRings*2*PI, steps = Math.min(20000, effectiveRings*120), stepSize = maxTheta/steps;
                              let inner=[], outer=[], drawing=false;
                              for (let t=0; t<maxTheta; t+=stepSize) {
                                  const r = (t/maxTheta)*(maxCropDim/2), a = t+radRot, cx = centerX+r*Math.cos(a), cy = centerY+r*Math.sin(a);
-                                 const val = getVal(cx,cy,totalRot,layer.key), wFactor = Math.max(0,val*lineThickness); // Invert val for darkness = thickness
+                                 const val = getVal(cx,cy,totalRot,layer.key), wFactor = Math.max(0,val*lineThickness); 
                                  if (wFactor*spacing > 0.5) {
                                      if (!drawing) drawing=true;
                                      inner.push({x:centerX+(r-wFactor*spacing/2)*Math.cos(a), y:centerY+(r-wFactor*spacing/2)*Math.sin(a)});
                                      outer.push({x:centerX+(r+wFactor*spacing/2)*Math.cos(a), y:centerY+(r+wFactor*spacing/2)*Math.sin(a)});
                                  } else if (drawing) {
-                                     if(inner.length>2) { let d=\`M \${inner[0].x.toFixed(2)} \${inner[0].y.toFixed(2)}\`; for(let i=1;i<inner.length;i++) d+=\` L \${inner[i].x.toFixed(2)} \${inner[i].y.toFixed(2)}\`; d+=\` L \${outer[outer.length-1].x.toFixed(2)} \${outer[outer.length-1].y.toFixed(2)}\`; for(let i=outer.length-2;i>=0;i--) d+=\` L \${outer[i].x.toFixed(2)} \${outer[i].y.toFixed(2)}\`; d+=' Z'; paths.push(\`<path d="\${d}" />\`); }
+                                     if(inner.length>2) { 
+                                        let fill = preserveColor ? getAdjustedColor(inner[0].x, inner[0].y) : layer.color;
+                                        let d=\`M \${inner[0].x.toFixed(2)} \${inner[0].y.toFixed(2)}\`; for(let i=1;i<inner.length;i++) d+=\` L \${inner[i].x.toFixed(2)} \${inner[i].y.toFixed(2)}\`; d+=\` L \${outer[outer.length-1].x.toFixed(2)} \${outer[outer.length-1].y.toFixed(2)}\`; for(let i=outer.length-2;i>=0;i--) d+=\` L \${outer[i].x.toFixed(2)} \${outer[i].y.toFixed(2)}\`; d+=' Z'; 
+                                        paths.push(\`<path d="\${d}" fill="\${fill}" stroke="none" />\`); 
+                                     }
                                      inner=[]; outer=[]; drawing=false;
                                  }
                              }
-                             if(inner.length>2) { let d=\`M \${inner[0].x.toFixed(2)} \${inner[0].y.toFixed(2)}\`; for(let i=1;i<inner.length;i++) d+=\` L \${inner[i].x.toFixed(2)} \${inner[i].y.toFixed(2)}\`; d+=\` L \${outer[outer.length-1].x.toFixed(2)} \${outer[outer.length-1].y.toFixed(2)}\`; for(let i=outer.length-2;i>=0;i--) d+=\` L \${outer[i].x.toFixed(2)} \${outer[i].y.toFixed(2)}\`; d+=' Z'; paths.push(\`<path d="\${d}" />\`); }
+                             if(inner.length>2) { 
+                                 let fill = preserveColor ? getAdjustedColor(inner[0].x, inner[0].y) : layer.color;
+                                 let d=\`M \${inner[0].x.toFixed(2)} \${inner[0].y.toFixed(2)}\`; for(let i=1;i<inner.length;i++) d+=\` L \${inner[i].x.toFixed(2)} \${inner[i].y.toFixed(2)}\`; d+=\` L \${outer[outer.length-1].x.toFixed(2)} \${outer[outer.length-1].y.toFixed(2)}\`; for(let i=outer.length-2;i>=0;i--) d+=\` L \${outer[i].x.toFixed(2)} \${outer[i].y.toFixed(2)}\`; d+=' Z'; 
+                                 paths.push(\`<path d="\${d}" fill="\${fill}" stroke="none" />\`);
+                             }
                         } else if (mode === 'dots') {
                              const gridSize = maxCropDim/effectiveRings;
                              for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
                                  for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
                                      const rx = x * Math.cos(radRot) - y * Math.sin(radRot), ry = x * Math.sin(radRot) + y * Math.cos(radRot);
                                      const cx = centerX+rx, cy = centerY+ry;
-                                     const val = getVal(cx, cy, totalRot, layer.key), size = gridSize * val * lineThickness; // Invert val for darkness = size
+                                     const val = getVal(cx, cy, totalRot, layer.key), size = gridSize * val * lineThickness; 
                                      if (size > 0.5) {
-                                         if (dotShape === 'circle') paths.push(\`<circle cx="\${cx.toFixed(2)}" cy="\${cy.toFixed(2)}" r="\${(size/1.5).toFixed(2)}" />\`);
-                                         else if (dotShape === 'square') paths.push(\`<rect x="\${(cx-size/2).toFixed(2)}" y="\${(cy-size/2).toFixed(2)}" width="\${size.toFixed(2)}" height="\${size.toFixed(2)}" />\`);
-                                         else if (dotShape === 'diamond') paths.push(\`<rect x="\${(cx-size/2).toFixed(2)}" y="\${(cy-size/2).toFixed(2)}" width="\${size.toFixed(2)}" height="\${size.toFixed(2)}" transform="rotate(45 \${cx} \${cy})" />\`);
-                                         else if (dotShape === 'triangle') { const hT = size*0.866, rT = hT*0.66; paths.push(\`<polygon points="\${cx},\${cy-rT} \${cx-size/2},\${cy+(hT-rT)} \${cx+size/2},\${cy+(hT-rT)}" />\`); }
+                                         let fill = preserveColor ? getAdjustedColor(cx, cy) : layer.color;
+                                         if (dotShape === 'circle') paths.push(\`<circle cx="\${cx.toFixed(2)}" cy="\${cy.toFixed(2)}" r="\${(size/1.5).toFixed(2)}" fill="\${fill}" stroke="none" />\`);
+                                         else if (dotShape === 'square') paths.push(\`<rect x="\${(cx-size/2).toFixed(2)}" y="\${(cy-size/2).toFixed(2)}" width="\${size.toFixed(2)}" height="\${size.toFixed(2)}" fill="\${fill}" stroke="none" />\`);
+                                         else if (dotShape === 'diamond') paths.push(\`<rect x="\${(cx-size/2).toFixed(2)}" y="\${(cy-size/2).toFixed(2)}" width="\${size.toFixed(2)}" height="\${size.toFixed(2)}" transform="rotate(45 \${cx} \${cy})" fill="\${fill}" stroke="none" />\`);
+                                         else if (dotShape === 'triangle') { const hT = size*0.866, rT = hT*0.66; paths.push(\`<polygon points="\${cx},\${cy-rT} \${cx-size/2},\${cy+(hT-rT)} \${cx+size/2},\${cy+(hT-rT)}" fill="\${fill}" stroke="none" />\`); }
                                      }
                                  }
                              }
-                        } else { // Lines, Flow
-                             // For simplicity and speed in this worker, other modes (lines, flow) can fall back to a raster-based black/white threshold if true vector tracing isn't implemented.
-                             // But for true vector output, you would implement line/path tracing here. We'll use the placeholder:
+                        } else { // Lines, Flow - Output as lines with stroke
+                             // Note: Flow/Lines are too complex for simple polygon conversion and usually require path tracing for true SVG.
+                             // For simplicity here, they would typically be handled as stokes, respecting the thickness setting.
+                             let strokeWidth = Math.max(0.5, lineThickness * 5); // Heuristic for line width
                              paths.push(\`<text x="\${centerX/2}" y="\${centerY}" font-size="20" fill="red">Vector trace not fully implemented in worker for this mode.</text>\`);
                         }
 
-                        svgBody += \`<g id="\${layer.name}" fill="\${layer.color}" stroke="\${layer.color}" stroke-linecap="round" stroke-linejoin="round">\n\${paths.join('\\n')}\n</g>\n\`;
+                        // Use a neutral group for non-cmyk or if preserving color
+                        const groupID = (preserveColor && colorMode === 'mono') ? 'Color_Preserved' : layer.name;
+                        const groupFill = preserveColor ? '' : layer.color;
+                        
+                        svgBody += \`<g id="\${groupID}" \${preserveColor ? '' : \`fill="\${groupFill}" stroke="\${groupFill}"\`}>\n\${paths.join('\\n')}\n</g>\n\`;
                     });
 
                     // Set stroke="none" and fill="none" on the main SVG element to ensure a transparent background.
-                    const svgContent = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 \${w} \${h}" width="\${w}mm" height="\${h}mm" style="background:none; fill:none; stroke:none;">\${svgBody}</svg>\`;
+                    const svgContent = \`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 \${w} \${h}" width="\${w}px" height="\${h}px" style="background:none;">\${svgBody}</svg>\`; // Changed mm to px to prevent massive scaling issues
                     self.postMessage({ type: 'svgResult', result: svgContent });
                 } 
                 
                 else if (type === 'stl') {
-                     // STL Generation Logic (same as before, but encapsulated in the worker)
+                     // STL Generation Logic 
                      const pMin = modeSettings.litho.minDepth, pMax = modeSettings.litho.maxDepth, widthMm = modeSettings.litho.widthMm;
                      const pxSize = widthMm / w;
                      const baseDepth = pMin, maxDepth = pMax;
@@ -1185,10 +1267,9 @@ export default function App() {
 
                      const getHeight = (x, y) => { 
                          const idx = (y * w + x) * 4; 
-                         if (sourceData[idx+3] < 10) return 0; // Transparent areas are 0 depth
-                         // Calculate grayscale from color data (assumes rasterized output is grayscale)
+                         if (sourceData[idx+3] < 10) return 0;
+                         // This path uses the final rasterized grayscale image (already computed by renderFrame)
                          const val = (sourceData[idx] + sourceData[idx+1] + sourceData[idx+2]) / 3 / 255;
-                         // Darker value (0) -> Max depth (pMax). Lighter value (1) -> Min depth (pMin)
                          return baseDepth + ((1 - val) * (maxDepth - baseDepth));
                      };
 
@@ -1262,10 +1343,10 @@ export default function App() {
         worker.postMessage({ 
             type: 'svg', 
             data: imgData, 
-            config: { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings }
+            config: { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings, preserveColor } // Added preserveColor
         }, [imgData]); 
 
-    }, [mode, rings, rotation, frameShape, cropAspectW, cropAspectH, centerHole, colorMode, activeLayers, fgColor, borderWidth, dotShape, lineThickness, brightness, contrast, invert, renderFrame, worker, modeSettings, is3DMode]);
+    }, [mode, rings, rotation, frameShape, cropAspectW, cropAspectH, centerHole, colorMode, activeLayers, fgColor, borderWidth, dotShape, lineThickness, brightness, contrast, invert, renderFrame, worker, modeSettings, is3DMode, preserveColor]);
 
     const downloadSTL = useCallback(() => {
         if (!sourceImageRef.current || !canvasRef.current || !worker) return;
@@ -1280,7 +1361,9 @@ export default function App() {
         const w = Math.floor(sourceImageRef.current.width * scaleFactor);
         const h = Math.floor(sourceImageRef.current.height * scaleFactor);
         tempCanvas.width = w; tempCanvas.height = h;
-        renderFrame(tempCanvas.getContext('2d'), w, h, true);
+        // STL always uses the grayscale intensity regardless of preserveColor.
+        // We pass the settings to the worker, which uses the final image data.
+        renderFrame(tempCanvas.getContext('2d'), w, h, true); 
 
         const imgData = tempCanvas.getContext('2d').getImageData(0, 0, w, h).data.buffer;
 
@@ -1299,7 +1382,7 @@ export default function App() {
         worker.postMessage({ 
             type: 'stl', 
             data: imgData, 
-            config: { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings }
+            config: { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings, preserveColor }
         }, [imgData]); 
 
     }, [frameShape, cropAspectW, cropAspectH, modeSettings.litho, renderFrame, worker, centerHole, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings]);
@@ -1314,11 +1397,10 @@ export default function App() {
                 const h = img.height * exportScale;
                 const exportCanvas = document.createElement('canvas');
                 exportCanvas.width = w; exportCanvas.height = h;
-                // **Modification here:** The renderFrame call with isExport=true already handles the transparency
+                // renderFrame with isExport=true handles transparency and final output style
                 renderFrame(exportCanvas.getContext('2d'), w, h, true);
                 const link = document.createElement('a');
                 link.download = `if-studio-${Date.now()}.png`;
-                // exportCanvas.toDataURL('image/png') preserves the canvas's transparency (which renderFrame ensures)
                 link.href = exportCanvas.toDataURL('image/png');
                 link.click();
                 showToast("PNG Exported!", 'success');
@@ -1356,6 +1438,14 @@ export default function App() {
     const setCenterHoleAndRecord = (val) => setHistoryState(prev => ({...prev, centerHole: val}), 'Change Center Hole');
     const setBorderWidthAndRecord = (val) => setHistoryState(prev => ({...prev, borderWidth: val}), 'Change Border Width');
     const updateDotShapeAndRecord = (shape) => updateSetting('dotShape', shape);
+    // --- NEW SETTER ---
+    const setPreserveColorAndRecord = (val) => {
+        setHistoryState(prev => {
+            const newMode = val ? 'mono' : prev.mode; // Reset to mono if enabling color preserve
+            return {...prev, preserveColor: val, colorMode: val ? 'mono' : prev.colorMode, mode: newMode} 
+        }, `Toggle Preserve Color to ${val}`);
+    }
+    // --- END NEW SETTER ---
 
 
     const renderControls = (section) => {
@@ -1404,15 +1494,26 @@ export default function App() {
             );
             case 'color': return (
                 <>
+                    {/* --- NEW TOGGLE FOR PRESERVE COLOR --- */}
+                    <Toggle 
+                        label="Original Color" 
+                        description="Keeps source color on pattern features (mono mode only)." 
+                        active={preserveColor} 
+                        onToggle={() => setPreserveColorAndRecord(!preserveColor)} 
+                        icon={Droplet}
+                    />
+                    <div className='my-4 border-t border-gray-100' />
+                    {/* --- END NEW TOGGLE --- */}
+
                     {!lithoPreview && mode !== 'photo' && (
                         <div className="flex p-1 bg-gray-100 rounded-lg mb-4">
-                            <button onClick={() => setColorModeAndRecord('mono')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'mono' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'}`}>Mono</button>
-                            <button onClick={() => setColorModeAndRecord('cmyk')} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'cmyk' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}>CMYK</button>
+                            <button onClick={() => setColorModeAndRecord('mono')} disabled={preserveColor} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'mono' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-400'} ${preserveColor ? 'opacity-50 cursor-not-allowed' : ''}`}>Mono</button>
+                            <button onClick={() => setColorModeAndRecord('cmyk')} disabled={preserveColor} className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${colorMode === 'cmyk' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'} ${preserveColor ? 'opacity-50 cursor-not-allowed' : ''}`}>CMYK</button>
                         </div>
                     )}
                     {(colorMode === 'mono' || mode === 'photo') ? (
                         <>
-                            {!lithoPreview && <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColorAndRecord} />}
+                            {!lithoPreview && <ColorPicker label="Ink Color" value={fgColor} onChange={setFgColorAndRecord} disabled={preserveColor} />}
                             <Toggle label="Invert" active={invert} onToggle={() => setInvertAndRecord(!invert)} icon={Zap} description="Invert darks and lights." />
                         </>
                     ) : (
