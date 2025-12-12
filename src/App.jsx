@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from '
 import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon, Dice5, Monitor, Smartphone, GripHorizontal } from 'lucide-react';
 
 /**
- * IF Studio - Ultimate Version (v1.5)
+ * IF Studio - Ultimate Version
  */
 
 // --- Constants ---
@@ -15,13 +15,12 @@ const CMYK_COLORS = { c: '#00FFFF', m: '#FF00FF', y: '#FFFF00', k: '#000000' };
 const MOBILE_NAV_HEIGHT = 64;
 const LOCAL_STORAGE_KEY = 'IFStudioV4_AppState';
 const AUTOSAVE_DEBOUNCE_MS = 1000;
-const HISTORY_DEBOUNCE_MS = 500; // New debounce for heavy interactive changes
+const HISTORY_DEBOUNCE_MS = 500;
 
 // --- SEO Data ---
 const SEO_TITLE = "IF Studio | Free Vector Art, Halftone & Lithophane Generator";
 const SEO_DESCRIPTION = "Transform images into spiral art, single-line vectors, halftone dots, and 3D lithophanes. The ultimate free tool for laser cutting, CNC, and 3D printing enthusiasts.";
 const SEO_KEYWORDS = "vector art generator, halftone pattern, spiral art maker, lithophane stl generator, laser cutter templates, cnc software, svg converter, stipple generator, 3d print tools, insert fabrication";
-// You would ideally replace this with a permanent image URL for your site logo/preview
 const SEO_OG_IMAGE = "https://example.com/ifstudio_preview.png"; 
 
 // --- Centralized Initial State ---
@@ -33,7 +32,8 @@ const INITIAL_APP_STATE = {
         dots: DEFAULT_PATTERN_SETTINGS,
         flow: { ...DEFAULT_PATTERN_SETTINGS, rings: 80, thickness: 0.8 },
         photo: DEFAULT_PATTERN_SETTINGS,
-        litho: { resolution: 0.5, widthMm: 100, minDepth: 0.8, maxDepth: 3.0 }
+        // Changed 'resolution' to 'mmPerPixel' (Default 0.15mm is good quality for FDM)
+        litho: { mmPerPixel: 0.15, widthMm: 100, minDepth: 0.8, maxDepth: 3.0 }
     },
     frameShape: 'circle',
     scale: 1, panX: 50, panY: 50, centerHole: 0, borderWidth: 0,
@@ -45,6 +45,30 @@ const INITIAL_APP_STATE = {
 
 
 // --- Helper Components ---
+
+// New Component: SVG Filters for GPU effects with Dynamic Depth Feedback
+const SVGFilters = memo(({ minDepth = 0.8, maxDepth = 3.0 }) => {
+    // "Fake Effect" Logic for preview
+    const depthRange = Math.max(0.1, maxDepth - minDepth);
+    const contrast = 1.0 + (depthRange * 0.6); 
+    const intercept = 0.5 - (0.5 * contrast);
+
+    return (
+        <svg width="0" height="0" className="absolute pointer-events-none opacity-0">
+            <defs>
+                <filter id="litho-emboss" x="-20%" y="-20%" width="140%" height="140%">
+                    <feColorMatrix type="saturate" values="0" result="grayscale"/>
+                    <feConvolveMatrix order="3,3" kernelMatrix="1 0 0 0 0 0 0 0 -1" divisor="1" bias="0.5" targetX="1" targetY="1" edgeMode="duplicate" preserveAlpha="true" in="grayscale" result="embossed"/>
+                    <feComponentTransfer in="embossed">
+                        <feFuncR type="linear" slope={contrast} intercept={intercept}/>
+                        <feFuncG type="linear" slope={contrast} intercept={intercept}/>
+                        <feFuncB type="linear" slope={contrast} intercept={intercept}/>
+                    </feComponentTransfer>
+                </filter>
+            </defs>
+        </svg>
+    );
+});
 
 const Tooltip = memo(({ text }) => (
     <div className="group relative inline-block ml-2">
@@ -71,6 +95,7 @@ const Slider = memo(({ label, value, min, max, step, onChange, icon: Icon, highl
             <input type="number" value={typeof value === 'number' ? (Number.isInteger(step) ? value : value.toFixed(2)) : value} onChange={(e) => { const val = parseFloat(e.target.value); if (!isNaN(val)) onChange(val); }} step={step} className="text-[10px] md:text-xs text-gray-500 font-mono bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200 w-16 text-right focus:ring-1 focus:ring-blue-300 outline-none" />
         </div>
         <div className="relative h-5 md:h-6 flex items-center">
+            {/* Conditional gradient direction for mmPerPixel: Lower is better (Green/Blue) */}
             <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="absolute w-full h-1.5 md:h-2 bg-gray-200 rounded-full appearance-none cursor-pointer transition-all duration-100 focus:outline-none focus:ring-2 focus:ring-[#3B82F6]/50 z-10" style={{ backgroundImage: `linear-gradient(${THEME_COLOR}, ${THEME_COLOR})`, backgroundSize: `${((value - min) * 100) / (max - min)}% 100%`, backgroundRepeat: 'no-repeat' }} />
             <style>{`input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%; background: #ffffff; border: 3px solid #3B82F6; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.1s ease-out; margin-top: 0px; } input[type=range]::-webkit-slider-thumb:active { transform: scale(1.1); }`}</style>
         </div>
@@ -552,7 +577,7 @@ export default function App() {
 
     const updateSetting = useCallback((key, value) => {
         setHistoryState(prev => {
-            if (['widthMm', 'minDepth', 'maxDepth', 'resolution'].includes(key)) {
+            if (['widthMm', 'minDepth', 'maxDepth', 'resolution', 'mmPerPixel'].includes(key)) {
                 return { ...prev, modeSettings: { ...prev.modeSettings, litho: { ...prev.modeSettings.litho, [key]: value } } };
             } else {
                 return { ...prev, modeSettings: { ...prev.modeSettings, [mode]: { ...prev.modeSettings[mode], [key]: value } } };
@@ -826,16 +851,12 @@ export default function App() {
             outputCanvas.width = w; outputCanvas.height = h;
             const oCtx = outputCanvas.getContext('2d', { willReadFrequently: true });
 
-            // **MODIFICATION FOR TRANSPARENT EXPORT:** Do not fill the background for SVG/PNG export
             if (!isExport) {
                 oCtx.fillStyle = '#FFFFFF'; oCtx.beginPath();
                 if (currentFrameShape === 'circle') oCtx.arc(centerX, centerY, maxCropDim / 2, 0, Math.PI * 2);
                 else oCtx.rect(cropX, cropY, cropW, cropH);
                 oCtx.fill();
-            } else {
-                 // For export, the canvas starts clear (transparent black)
             }
-
 
             if (compareMode && !isExport) {
                 oCtx.save(); oCtx.beginPath();
@@ -853,7 +874,8 @@ export default function App() {
                  const halfCropW = cropW / 2, halfCropH = cropH / 2;
 
                  let layersToRender = [];
-                 if (mode === 'photo') layersToRender.push({ key: 'photo', color: hexToRgb(fgColor), angleOffset: 0 });
+                 // OPTIMIZATION: If lithoPreview is active, force mono mode rendering to prepare the underlying grayscale data
+                 if (mode === 'photo' || lithoPreview) layersToRender.push({ key: 'photo', color: hexToRgb(fgColor), angleOffset: 0 });
                  else if (colorMode === 'cmyk') {
                       if (activeLayers.c) layersToRender.push({ key: 'c', color: CMYK_COLORS.c, angleOffset: CMYK_ANGLES.c });
                       if (activeLayers.m) layersToRender.push({ key: 'm', color: CMYK_COLORS.m, angleOffset: CMYK_ANGLES.m });
@@ -862,14 +884,14 @@ export default function App() {
                  } else layersToRender.push({ key: 'mono', color: hexToRgb(fgColor), angleOffset: 0 }); 
 
                  layersToRender.forEach((layer, i) => {
-                      const isMono = layer.key === 'mono' || layer.key === 'photo'; 
+                      const isMono = layer.key === 'mono' || layer.key === 'photo' || lithoPreview; 
                       const layerColor = isMono ? layer.color : hexToRgb(layer.color); 
                       const totalRotation = rotation + layer.angleOffset;
                       const radRotation = (totalRotation * PI) / 180;
                       const layerImgData = oCtx.createImageData(w, h);
                       const data = layerImgData.data;
                       
-                      if (mode === 'flow') {
+                      if (mode === 'flow' && !lithoPreview) {
                           const gridSize = maxCropDim / effectiveRings; 
                           const strokeLen = gridSize * (lineThickness * 3.0);
                           const flowCanvas = document.createElement('canvas');
@@ -882,97 +904,100 @@ export default function App() {
                           fCtx.beginPath();
                           for (let y = -maxCropDim/2; y < maxCropDim/2; y += gridSize) {
                               for (let x = -maxCropDim/2; x < maxCropDim/2; x += gridSize) {
-                                       const cx = centerX + x, cy = centerY + y;
-                                       const dx = cx - centerX, dy = cy - centerY, distSq = dx*dx + dy*dy;
-                                       if (currentFrameShape === 'circle' && distSq > maxRadiusSq) continue;
-                                       if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
-                                       if (distSq < holeRadiusSq) continue;
-                                       const ix = Math.floor(cx), iy = Math.floor(cy);
-                                       if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
-                                       const idx = (iy * w + ix) * 4;
-                                       if (sourceData[idx+3] === 0) continue;
-                                       const getL = (idx) => 0.299*(sourceData[idx]/255) + 0.587*(sourceData[idx+1]/255) + 0.114*(sourceData[idx+2]/255);
-                                       const luma = getL(idx);
-                                       const val = (luma - 0.5) * contrast + 0.5 + (brightness/255);
-                                       if ((val > 0.95 && !invert) || (val < 0.05 && invert)) continue;
-                                       const gx = getL(((iy)*w + (ix+1))*4) - getL(((iy)*w + (ix-1))*4);
-                                       const gy = getL(((iy+1)*w + (ix))*4) - getL(((iy-1)*w + (ix))*4);
-                                       const angle = Math.atan2(gy, gx) + Math.PI/2;
-                                       const x1 = cx - Math.cos(angle)*strokeLen/2, y1 = cy - Math.sin(angle)*strokeLen/2;
-                                       const x2 = cx + Math.cos(angle)*strokeLen/2, y2 = cy + Math.sin(angle)*strokeLen/2;
-                                       fCtx.moveTo(x1, y1); fCtx.lineTo(x2, y2);
-                                   }
+                                    const cx = centerX + x, cy = centerY + y;
+                                    const dx = cx - centerX, dy = cy - centerY, distSq = dx*dx + dy*dy;
+                                    if (currentFrameShape === 'circle' && distSq > maxRadiusSq) continue;
+                                    if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) continue;
+                                    if (distSq < holeRadiusSq) continue;
+                                    const ix = Math.floor(cx), iy = Math.floor(cy);
+                                    if (ix < 1 || ix >= w-1 || iy < 1 || iy >= h-1) continue;
+                                    const idx = (iy * w + ix) * 4;
+                                    if (sourceData[idx+3] === 0) continue;
+                                    const getL = (idx) => 0.299*(sourceData[idx]/255) + 0.587*(sourceData[idx+1]/255) + 0.114*(sourceData[idx+2]/255);
+                                    const luma = getL(idx);
+                                    const val = (luma - 0.5) * contrast + 0.5 + (brightness/255);
+                                    if ((val > 0.95 && !invert) || (val < 0.05 && invert)) continue;
+                                    const gx = getL(((iy)*w + (ix+1))*4) - getL(((iy)*w + (ix-1))*4);
+                                    const gy = getL(((iy+1)*w + (ix))*4) - getL(((iy-1)*w + (ix))*4);
+                                    const angle = Math.atan2(gy, gx) + Math.PI/2;
+                                    const x1 = cx - Math.cos(angle)*strokeLen/2, y1 = cy - Math.sin(angle)*strokeLen/2;
+                                    const x2 = cx + Math.cos(angle)*strokeLen/2, y2 = cy + Math.sin(angle)*strokeLen/2;
+                                    fCtx.moveTo(x1, y1); fCtx.lineTo(x2, y2);
+                               }
                            }
                            fCtx.stroke();
                            oCtx.drawImage(flowCanvas, 0, 0);
                        } else {
                            for (let y = 0; y < h; y++) {
                                for (let x = 0; x < w; x++) {
-                                       const index = (y * w + x) * 4;
-                                       if (sourceData[index+3] === 0) { data[index+3] = 0; continue; }
-                                       const dx = x - centerX, dy = y - centerY, distSq = dx*dx + dy*dy;
-                                       if (currentFrameShape === 'circle' && distSq > maxRadiusSq) { data[index+3] = 0; continue; }
-                                       if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) { data[index+3] = 0; continue; }
-                                       if (distSq < holeRadiusSq) { data[index+3] = 0; continue; }
-                                       
-                                       let r = sourceData[index]/255, g = sourceData[index+1]/255, b = sourceData[index+2]/255;
-                                       let val = 1.0;
-                                       if (isMono) {
-                                           let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
-                                           luma += brightness; luma = (luma - 128) * contrast + 128;
-                                           if (luma < 0) luma = 0; if (luma > 255) luma = 255;
-                                           val = luma / 255;
-                                           if (invert) val = 1.0 - val;
-                                           if (mode === 'photo') { data[index] = val*255; data[index+1] = val*255; data[index+2] = val*255; data[index+3] = 255; continue; }
-                                       } else {
-                                            r = Math.min(1, Math.max(0, ((r-0.5)*contrast+0.5)+(brightness/255)));
-                                            g = Math.min(1, Math.max(0, ((g-0.5)*contrast+0.5)+(brightness/255)));
-                                            b = Math.min(1, Math.max(0, ((b-0.5)*contrast+0.5)+(brightness/255)));
-                                            let k = 1 - Math.max(r, g, b);
-                                            if (layer.key === 'c') val = 1 - ((1 - r - k) / (1 - k) || 0);
-                                            if (layer.key === 'm') val = 1 - ((1 - g - k) / (1 - k) || 0);
-                                            if (layer.key === 'y') val = 1 - ((1 - b - k) / (1 - k) || 0);
-                                            if (layer.key === 'k') val = 1 - k;
-                                       }
-                                       let isForeground = false;
-                                       if (mode === 'spiral') {
-                                            const dist = Math.sqrt(distSq);
-                                            const angle = Math.atan2(dy, dx) + radRotation;
-                                            const normDist = dist / (maxCropDim / 2);
-                                            const wave = Math.sin( (normDist * effectiveRings * PI2) + angle );
-                                            const spacingPx = (maxCropDim / 2) / effectiveRings; 
-                                            let threshold = (1 - val) * (lineThickness * 2);
-                                            if (is3DMode) {
-                                                 const minDuty = minFeaturePx / spacingPx; if (threshold < minDuty) threshold = minDuty;
-                                            } else if (threshold < 0.05 && lineThickness > 0.1) threshold = 0.05;
-                                            if ((wave + 1) / 2 < threshold) isForeground = true;
-                                       } else if (mode === 'lines') {
-                                            const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
-                                            const normY = ry / (maxCropDim / 2); 
-                                            const wave = Math.sin( normY * effectiveRings * PI );
-                                            const spacingPx = maxCropDim / effectiveRings;
-                                            let threshold = (1 - val) * (lineThickness * 2);
-                                            if (is3DMode) { const minDuty = minFeaturePx / spacingPx; if (threshold < minDuty) threshold = minDuty; }
-                                            if ((wave + 1) / 2 < threshold) isForeground = true;
-                                       } else if (mode === 'dots') {
-                                            const rx = dx * Math.cos(radRotation) - dy * Math.sin(radRotation);
-                                            const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
-                                            const gridSize = maxCropDim / effectiveRings; 
-                                            if (gridSize > 0) {
-                                                 const cellX = Math.floor(rx / gridSize), cellY = Math.floor(ry / gridSize);
-                                                 const lx = rx - ((cellX + 0.5) * gridSize), ly = ry - ((cellY + 0.5) * gridSize);
-                                                 let dome = 0, normDist = 0;
-                                                 if (dotShape === 'circle') { normDist = Math.sqrt(lx*lx + ly*ly) / (gridSize / 1.5); if (normDist < 1) dome = Math.cos(normDist * (PI / 2)); }
-                                                 else if (dotShape === 'square') { normDist = Math.max(Math.abs(lx), Math.abs(ly)) / (gridSize / 2.0); if (normDist < 1) dome = 1.0 - normDist; }
-                                                 else if (dotShape === 'diamond') { normDist = (Math.abs(lx) + Math.abs(ly)) / (gridSize / 1.5); if (normDist < 1) dome = 1.0 - normDist; }
-                                                 else if (dotShape === 'triangle') { const k = Math.sqrt(3); normDist = Math.max(Math.abs(lx) * k/2 + ly/2, -ly) / (gridSize / 2.5); if (normDist < 1) dome = 1.0 - normDist; }
-                                                 let cutoff = val / lineThickness;
-                                                 if (is3DMode) { const maxValForSafeSize = 1.0 - (minFeaturePx / gridSize); if (cutoff > maxValForSafeSize) cutoff = maxValForSafeSize; }
-                                                 if (dome > cutoff) isForeground = true;
-                                            }
-                                       }
-                                       if (isForeground) { data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255; } 
-                                       else if (isExport) { data[index+3] = 0; } // Ensure transparency for background when exporting
+                                     const index = (y * w + x) * 4;
+                                     if (sourceData[index+3] === 0) { data[index+3] = 0; continue; }
+                                     const dx = x - centerX, dy = y - centerY, distSq = dx*dx + dy*dy;
+                                     if (currentFrameShape === 'circle' && distSq > maxRadiusSq) { data[index+3] = 0; continue; }
+                                     if (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH)) { data[index+3] = 0; continue; }
+                                     if (distSq < holeRadiusSq) { data[index+3] = 0; continue; }
+                                     
+                                     let r = sourceData[index]/255, g = sourceData[index+1]/255, b = sourceData[index+2]/255;
+                                     let val = 1.0;
+                                     if (isMono) {
+                                          let luma = 0.299 * (r*255) + 0.587 * (g*255) + 0.114 * (b*255);
+                                          luma += brightness; luma = (luma - 128) * contrast + 128;
+                                          if (luma < 0) luma = 0; if (luma > 255) luma = 255;
+                                          val = luma / 255;
+                                          if (invert) val = 1.0 - val;
+                                          if (mode === 'photo' || lithoPreview) { 
+                                              // Render solid grayscale for litho preview base data
+                                              data[index] = val*255; data[index+1] = val*255; data[index+2] = val*255; data[index+3] = 255; continue; 
+                                          }
+                                     } else {
+                                           r = Math.min(1, Math.max(0, ((r-0.5)*contrast+0.5)+(brightness/255)));
+                                           g = Math.min(1, Math.max(0, ((g-0.5)*contrast+0.5)+(brightness/255)));
+                                           b = Math.min(1, Math.max(0, ((b-0.5)*contrast+0.5)+(brightness/255)));
+                                           let k = 1 - Math.max(r, g, b);
+                                           if (layer.key === 'c') val = 1 - ((1 - r - k) / (1 - k) || 0);
+                                           if (layer.key === 'm') val = 1 - ((1 - g - k) / (1 - k) || 0);
+                                           if (layer.key === 'y') val = 1 - ((1 - b - k) / (1 - k) || 0);
+                                           if (layer.key === 'k') val = 1 - k;
+                                     }
+                                     let isForeground = false;
+                                     if (mode === 'spiral') {
+                                           const dist = Math.sqrt(distSq);
+                                           const angle = Math.atan2(dy, dx) + radRotation;
+                                           const normDist = dist / (maxCropDim / 2);
+                                           const wave = Math.sin( (normDist * effectiveRings * PI2) + angle );
+                                           const spacingPx = (maxCropDim / 2) / effectiveRings; 
+                                           let threshold = (1 - val) * (lineThickness * 2);
+                                           if (is3DMode) {
+                                                const minDuty = minFeaturePx / spacingPx; if (threshold < minDuty) threshold = minDuty;
+                                           } else if (threshold < 0.05 && lineThickness > 0.1) threshold = 0.05;
+                                           if ((wave + 1) / 2 < threshold) isForeground = true;
+                                     } else if (mode === 'lines') {
+                                           const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
+                                           const normY = ry / (maxCropDim / 2); 
+                                           const wave = Math.sin( normY * effectiveRings * PI );
+                                           const spacingPx = maxCropDim / effectiveRings;
+                                           let threshold = (1 - val) * (lineThickness * 2);
+                                           if (is3DMode) { const minDuty = minFeaturePx / spacingPx; if (threshold < minDuty) threshold = minDuty; }
+                                           if ((wave + 1) / 2 < threshold) isForeground = true;
+                                     } else if (mode === 'dots') {
+                                           const rx = dx * Math.cos(radRotation) - dy * Math.sin(radRotation);
+                                           const ry = dx * Math.sin(radRotation) + dy * Math.cos(radRotation);
+                                           const gridSize = maxCropDim / effectiveRings; 
+                                           if (gridSize > 0) {
+                                                const cellX = Math.floor(rx / gridSize), cellY = Math.floor(ry / gridSize);
+                                                const lx = rx - ((cellX + 0.5) * gridSize), ly = ry - ((cellY + 0.5) * gridSize);
+                                                let dome = 0, normDist = 0;
+                                                if (dotShape === 'circle') { normDist = Math.sqrt(lx*lx + ly*ly) / (gridSize / 1.5); if (normDist < 1) dome = Math.cos(normDist * (PI / 2)); }
+                                                else if (dotShape === 'square') { normDist = Math.max(Math.abs(lx), Math.abs(ly)) / (gridSize / 2.0); if (normDist < 1) dome = 1.0 - normDist; }
+                                                else if (dotShape === 'diamond') { normDist = (Math.abs(lx) + Math.abs(ly)) / (gridSize / 1.5); if (normDist < 1) dome = 1.0 - normDist; }
+                                                else if (dotShape === 'triangle') { const k = Math.sqrt(3); normDist = Math.max(Math.abs(lx) * k/2 + ly/2, -ly) / (gridSize / 2.5); if (normDist < 1) dome = 1.0 - normDist; }
+                                                let cutoff = val / lineThickness;
+                                                if (is3DMode) { const maxValForSafeSize = 1.0 - (minFeaturePx / gridSize); if (cutoff > maxValForSafeSize) cutoff = maxValForSafeSize; }
+                                                if (dome > cutoff) isForeground = true;
+                                           }
+                                     }
+                                     if (isForeground) { data[index] = layerColor.r; data[index+1] = layerColor.g; data[index+2] = layerColor.b; data[index+3] = 255; } 
+                                     else if (isExport) { data[index+3] = 0; } 
                                }
                            }
                            const layerCanvas = document.createElement('canvas');
@@ -988,38 +1013,26 @@ export default function App() {
                       const borderPx = (borderWidth * maxCropDim) / 200; oCtx.lineWidth = borderPx; oCtx.strokeStyle = colorMode === 'cmyk' ? '#000000' : fgColor; oCtx.beginPath();
                       if (currentFrameShape === 'circle') oCtx.arc(centerX, centerY, maxCropDim / 2 - borderPx/2, 0, Math.PI * 2); else oCtx.rect(cropX + borderPx/2, cropY + borderPx/2, cropW - borderPx, cropH - borderPx); oCtx.stroke();
                  }
-
-                 if (lithoPreview) {
-                      const pMin = modeSettings.litho.minDepth, pMax = modeSettings.litho.maxDepth, depthRange = pMax - pMin;
-                      const rawData = oCtx.getImageData(0, 0, w, h).data, litData = oCtx.createImageData(w, h), lData = litData.data;
-                      for (let y = 0; y < h; y++) {
-                           for (let x = 0; x < w; x++) {
-                               const i = (y*w + x) * 4;
-                               // Strictly mask for preview too
-                               const dx = x - centerX, dy = y - centerY, distSq = dx*dx + dy*dy;
-                               const isMasked = (currentFrameShape === 'circle' && distSq > maxRadiusSq) || (currentFrameShape !== 'circle' && (Math.abs(dx) > halfCropW || Math.abs(dy) > halfCropH));
-                               
-                               if (isMasked || rawData[i+3] < 10) { lData[i] = 240; lData[i+1] = 240; lData[i+2] = 240; lData[i+3] = 255; continue; }
-                               const getZ = (idx) => pMin + ((1.0 - (rawData[idx] + rawData[idx+1] + rawData[idx+2])/3/255) * depthRange);
-                               const zCenter = getZ(i), zLeft = x>0 ? getZ((y*w + x-1)*4) : pMin, zTop = y>0 ? getZ(((y-1)*w + x)*4) : pMin;
-                               let intensity = Math.max(0, Math.min(255, 128 + ((zCenter-zLeft)+(zCenter-zTop))*20));
-                               lData[i] = intensity; lData[i+1] = intensity*0.95; lData[i+2] = intensity*0.9; lData[i+3] = 255;
-                           }
-                      }
-                      oCtx.putImageData(litData, 0, 0);
-                 }
+                 // OPTIMIZATION: Heavy CPU litho calculation removed. We now rely on the GPU SVG filter in the JSX for preview.
             } 
             ctx.clearRect(0, 0, w, h);
             if (isExport) ctx.drawImage(outputCanvas, 0, 0);
-            else { ctx.save(); ctx.translate(w/2, h/2); ctx.scale(editView.scale, editView.scale); ctx.translate(editView.x, editView.y); ctx.translate(-w/2, -h/2); ctx.drawImage(outputCanvas, 0, 0); ctx.restore(); }
+            else { 
+                ctx.save(); 
+                ctx.translate(w/2, h/2); 
+                ctx.scale(editView.scale, editView.scale); 
+                ctx.translate(editView.x, editView.y); 
+                ctx.translate(-w/2, -h/2); 
+                ctx.drawImage(outputCanvas, 0, 0); 
+                ctx.restore(); 
+            }
         } catch(e) { console.error(e); showToast("Rendering error.", 'error'); }
     }, [step, scale, panX, panY, frameShape, liveCrop, cropAspectW, cropAspectH, mode, modeSettings, contrast, brightness, invert, colorMode, activeLayers, fgColor, borderWidth, centerHole, is3DMode, minThickness, lithoPreview, compareMode, editView, isDragging, rings, lineThickness, rotation, dotShape]);
 
     useEffect(() => {
         if (!imageSrc || !canvasRef.current) return;
-        // Set interactive to true if dragging, or if the view is modified beyond 1:1 scale
         const isInteractive = step === 'crop' || isDragging || editView.scale !== 1.0;
-        const delay = isInteractive ? 0 : 30; // Render instantly if interacting
+        const delay = isInteractive ? 0 : 30;
         if (renderTimeoutRef.current) clearTimeout(renderTimeoutRef.current);
         renderTimeoutRef.current = setTimeout(() => {
             const canvas = canvasRef.current;
@@ -1032,6 +1045,7 @@ export default function App() {
         return () => clearTimeout(renderTimeoutRef.current);
     }, [renderFrame, imageSrc, step, isDragging, editView]);
     
+    // ... (rest of the component logic for workers and exports remains unchanged) ...
     // --- Export Logic using Web Worker ---
     const worker = useMemo(() => {
         // Basic Worker Script for SVG/STL calculation
@@ -1153,63 +1167,142 @@ export default function App() {
                 } 
                 
                 else if (type === 'stl') {
-                     // STL Generation Logic (same as before, but encapsulated in the worker)
-                     const pMin = modeSettings.litho.minDepth, pMax = modeSettings.litho.maxDepth, widthMm = modeSettings.litho.widthMm;
-                     const pxSize = widthMm / w;
-                     const baseDepth = pMin, maxDepth = pMax;
-                     const halfW = w/2, halfH = h/2;
+                      const pMin = modeSettings.litho.minDepth, pMax = modeSettings.litho.maxDepth, widthMm = modeSettings.litho.widthMm;
+                      const borderWidth = config.borderWidth || 0;
+                      // Pass pxSize derived from the calculated width
+                      const pxSize = widthMm / w;
+                      const baseDepth = pMin, maxDepth = pMax;
+                      const halfW = w/2, halfH = h/2;
+                      
+                      // Calculate border pixel width
+                      const borderPx = (borderWidth * maxCropDim) / 200;
 
-                     let validQuads = 0;
-                     for(let y=0; y<h-1; y++) {
-                         for(let x=0; x<w-1; x++) {
-                             if(frameShape === 'circle') {
-                                 const dx = x - halfW, dy = y - halfH;
-                                 if ((dx*dx + dy*dy) > (Math.min(halfW, halfH))**2) continue;
-                             }
-                             validQuads++;
-                         }
-                     }
+                      // Helper: check if a grid cell (quad) is valid (inside mask/image bounds)
+                      const isValidQuad = (x, y) => {
+                          if (x < 0 || y < 0 || x >= w-1 || y >= h-1) return false;
+                          if (frameShape === 'circle') {
+                               const dx = x - halfW, dy = y - halfH;
+                               return (dx*dx + dy*dy) <= (Math.min(halfW, halfH))**2;
+                          }
+                          return true;
+                      };
 
-                     const bufferSize = 84 + (50 * validQuads * 2);
-                     const buffer = new ArrayBuffer(bufferSize), view = new DataView(buffer);
-                     view.setUint32(80, validQuads * 2, true);
-                     let offset = 84; 
-
-                     const getHeight = (x, y) => { 
-                         const idx = (y * w + x) * 4; 
-                         if (sourceData[idx+3] < 10) return 0; // Transparent areas are 0 depth
-                         // Calculate grayscale from color data (assumes rasterized output is grayscale)
-                         const val = (sourceData[idx] + sourceData[idx+1] + sourceData[idx+2]) / 3 / 255;
-                         // Darker value (0) -> Max depth (pMax). Lighter value (1) -> Min depth (pMin)
-                         return baseDepth + ((1 - val) * (maxDepth - baseDepth));
-                     };
-
-                     for (let y = 0; y < h - 1; y++) {
-                         for (let x = 0; x < w - 1; x++) {
-                              if(frameShape === 'circle') {
-                                  const dx = x - halfW, dy = y - halfH;
-                                  if ((dx*dx + dy*dy) > (Math.min(halfW, halfH))**2) continue;
+                      // 1. COUNT PHASE
+                      // We need to count triangles for: Top Surface, Bottom Surface, and 4 Walls (Right, Left, Bottom, Top)
+                      let triangleCount = 0;
+                      for(let y=0; y<h-1; y++) {
+                          for(let x=0; x<w-1; x++) {
+                              if(isValidQuad(x, y)) {
+                                  triangleCount += 2; // Top surface (2 tris)
+                                  triangleCount += 2; // Bottom surface (2 tris)
+                                  
+                                  // Check Right Wall
+                                  if (!isValidQuad(x+1, y)) triangleCount += 2;
+                                  // Check Left Wall
+                                  if (!isValidQuad(x-1, y)) triangleCount += 2;
+                                  // Check Bottom Wall (y+1)
+                                  if (!isValidQuad(x, y+1)) triangleCount += 2;
+                                  // Check Top Wall (y-1)
+                                  if (!isValidQuad(x, y-1)) triangleCount += 2;
                               }
+                          }
+                      }
 
-                              const x0 = x*pxSize, y0 = y*pxSize, x1 = (x+1)*pxSize, y1 = (y+1)*pxSize;
-                              const z00 = getHeight(x, y), z10 = getHeight(x+1, y), z01 = getHeight(x, y+1), z11 = getHeight(x+1, y+1);
-                              
-                              // Triangle 1 (00-10-01)
-                              view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true); // Normal
-                              view.setFloat32(offset+12, x0, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z00, true);
-                              view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y0, true); view.setFloat32(offset+32, z10, true);
-                              view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
-                              view.setUint16(offset+48, 0, true); offset += 50;
+                      // Allocate Buffer
+                      const bufferSize = 84 + (50 * triangleCount);
+                      const buffer = new ArrayBuffer(bufferSize), view = new DataView(buffer);
+                      view.setUint32(80, triangleCount, true); // Write triangle count
+                      let offset = 84; 
 
-                              // Triangle 2 (10-11-01)
-                              view.setFloat32(offset, 0, true); view.setFloat32(offset+4, 0, true); view.setFloat32(offset+8, 1, true); // Normal
-                              view.setFloat32(offset+12, x1, true); view.setFloat32(offset+16, y0, true); view.setFloat32(offset+20, z10, true);
-                              view.setFloat32(offset+24, x1, true); view.setFloat32(offset+28, y1, true); view.setFloat32(offset+32, z11, true);
-                              view.setFloat32(offset+36, x0, true); view.setFloat32(offset+40, y1, true); view.setFloat32(offset+44, z01, true);
-                              view.setUint16(offset+48, 0, true); offset += 50;
-                         }
-                     }
-                     self.postMessage({ type: 'stlResult', result: buffer }, [buffer]);
+                      const getHeight = (x, y) => { 
+                          // --- DEDICATED FRAME LOGIC ---
+                          // Check if current pixel (x,y) is within the border region
+                          if (borderWidth > 0) {
+                              if (frameShape === 'circle') {
+                                  const dx = x - halfW, dy = y - halfH;
+                                  const dist = Math.sqrt(dx*dx + dy*dy);
+                                  // maxRadius = maxCropDim / 2. We check if distance is greater than (Radius - BorderWidth)
+                                  if (dist > ((maxCropDim/2) - borderPx)) return maxDepth; 
+                              } else {
+                                  // Rectangular Frame Logic
+                                  const dx = Math.abs(x - halfW);
+                                  const dy = Math.abs(y - halfH);
+                                  // halfCropW/H are calculated relative to crop aspect ratio.
+                                  // We need to use the actual bounds for x and y which are w and h here as we rendered full crop.
+                                  // BUT wait, w/h here are the canvas dimensions.
+                                  // If the image fits exactly, halfW is effectively halfCropW.
+                                  // Check if we are near the edge.
+                                  if (x < borderPx || x > (w - borderPx) || y < borderPx || y > (h - borderPx)) return maxDepth;
+                              }
+                          }
+                          // -----------------------------
+
+                          const idx = (y * w + x) * 4; 
+                          // If pixel is transparent/black(0 alpha), treat as 0 height for safety, though isValidQuad handles main mask
+                          if (idx >= sourceData.length || sourceData[idx+3] < 10) return baseDepth; 
+                          const val = (sourceData[idx] + sourceData[idx+1] + sourceData[idx+2]) / 3 / 255;
+                          // Darker (0) -> Thicker (maxDepth). Lighter (1) -> Thinner (minDepth)
+                          return baseDepth + ((1 - val) * (maxDepth - baseDepth));
+                      };
+
+                      // Helper to write a triangle to buffer
+                      const writeTri = (v1, v2, v3, normal) => {
+                          view.setFloat32(offset, normal[0], true); view.setFloat32(offset+4, normal[1], true); view.setFloat32(offset+8, normal[2], true);
+                          view.setFloat32(offset+12, v1.x, true); view.setFloat32(offset+16, v1.y, true); view.setFloat32(offset+20, v1.z, true);
+                          view.setFloat32(offset+24, v2.x, true); view.setFloat32(offset+28, v2.y, true); view.setFloat32(offset+32, v2.z, true);
+                          view.setFloat32(offset+36, v3.x, true); view.setFloat32(offset+40, v3.y, true); view.setFloat32(offset+44, v3.z, true);
+                          view.setUint16(offset+48, 0, true);
+                          offset += 50;
+                      };
+
+                      // 2. WRITE PHASE
+                      for (let y = 0; y < h - 1; y++) {
+                          for (let x = 0; x < w - 1; x++) {
+                              if(isValidQuad(x, y)) {
+                                  const x0 = x*pxSize, y0 = y*pxSize, x1 = (x+1)*pxSize, y1 = (y+1)*pxSize;
+                                  const z00 = getHeight(x, y), z10 = getHeight(x+1, y), z01 = getHeight(x, y+1), z11 = getHeight(x+1, y+1);
+                                  
+                                  // --- TOP SURFACE (Image Relief) ---
+                                  // Normal roughly up (0,0,1)
+                                  writeTri({x:x0,y:y0,z:z00}, {x:x1,y:y0,z:z10}, {x:x0,y:y1,z:z01}, [0,0,1]);
+                                  writeTri({x:x1,y:y0,z:z10}, {x:x1,y:y1,z:z11}, {x:x0,y:y1,z:z01}, [0,0,1]);
+
+                                  // --- BOTTOM SURFACE (Flat Back at Z=0) ---
+                                  // Normal down (0,0,-1). Winding order reversed relative to top.
+                                  writeTri({x:x0,y:y0,z:0}, {x:x0,y:y1,z:0}, {x:x1,y:y0,z:0}, [0,0,-1]);
+                                  writeTri({x:x1,y:y0,z:0}, {x:x0,y:y1,z:0}, {x:x1,y:y1,z:0}, [0,0,-1]);
+
+                                  // --- SIDE WALLS ---
+                                  // 1. Right Wall (at x+1)
+                                  if (!isValidQuad(x+1, y)) {
+                                      // Connect (x1,y0,z10)-(x1,y1,z11) to (x1,y0,0)-(x1,y1,0)
+                                      // Normal points Right (1,0,0)
+                                      writeTri({x:x1,y:y0,z:0}, {x:x1,y:y1,z:0}, {x:x1,y:y0,z:z10}, [1,0,0]);
+                                      writeTri({x:x1,y:y1,z:0}, {x:x1,y:y1,z:z11}, {x:x1,y:y0,z:z10}, [1,0,0]);
+                                  }
+                                  // 2. Left Wall (at x)
+                                  if (!isValidQuad(x-1, y)) {
+                                      // Normal points Left (-1,0,0)
+                                      writeTri({x:x0,y:y0,z:0}, {x:x0,y:y0,z:z00}, {x:x0,y:y1,z:0}, [-1,0,0]);
+                                      writeTri({x:x0,y:y1,z:0}, {x:x0,y:y0,z:z00}, {x:x0,y:y1,z:z01}, [-1,0,0]);
+                                  }
+                                  // 3. Bottom Wall (at y+1)
+                                  if (!isValidQuad(x, y+1)) {
+                                      // Normal points Down Y (0,1,0)
+                                      writeTri({x:x0,y:y1,z:0}, {x:x1,y:y1,z:0}, {x:x0,y:y1,z:z01}, [0,1,0]);
+                                      writeTri({x:x1,y:y1,z:0}, {x:x1,y:y1,z:z11}, {x:x0,y:y1,z:z01}, [0,1,0]);
+                                  }
+                                  // 4. Top Wall (at y)
+                                  if (!isValidQuad(x, y-1)) {
+                                      // Normal points Up Y (0,-1,0) - wait, y=0 is top? coordinate system: y increases down. 
+                                      // If y=0 is top, normal is (0,-1,0).
+                                      writeTri({x:x0,y:y0,z:0}, {x:x0,y:y0,z:z00}, {x:x1,y:y0,z:0}, [0,-1,0]);
+                                      writeTri({x:x1,y:y0,z:0}, {x:x0,y:y0,z:z00}, {x:x1,y:y0,z:z10}, [0,-1,0]);
+                                  }
+                              }
+                          }
+                      }
+                      self.postMessage({ type: 'stlResult', result: buffer }, [buffer]);
                 }
             };
         `;
@@ -1222,6 +1315,52 @@ export default function App() {
         }
         return null;
     }, []);
+
+    const downloadSTL = useCallback(() => {
+        if (!sourceImageRef.current || !canvasRef.current || !worker) return;
+        setIsProcessing(true); showToast('Generating STL...', 'info');
+
+        const refCanvas = canvasRef.current;
+        // 1. Render the current visual state (which for litho should be grayscale output)
+        const tempCanvas = document.createElement('canvas');
+        
+        // --- QUALITY LOGIC ---
+        // Calculate target resolution based on physical size and selected mmPerPixel
+        // e.g. 100mm / 0.1mm = 1000px width.
+        const mmPerPixel = modeSettings.litho.mmPerPixel || 0.15;
+        // Safety cap: 4096px width is plenty for high detail without crashing mobile browsers (2^12)
+        const maxSafeWidth = 4096;
+        const calculatedWidth = Math.floor(modeSettings.litho.widthMm / mmPerPixel);
+        const w = Math.min(maxSafeWidth, calculatedWidth);
+        
+        // Calculate height maintaining aspect ratio
+        const aspect = sourceImageRef.current.height / sourceImageRef.current.width;
+        const h = Math.floor(w * aspect);
+        
+        tempCanvas.width = w; tempCanvas.height = h;
+        renderFrame(tempCanvas.getContext('2d'), w, h, true);
+
+        const imgData = tempCanvas.getContext('2d').getImageData(0, 0, w, h).data.buffer;
+
+        worker.onmessage = (e) => {
+            setIsProcessing(false);
+            if (e.data.type === 'stlResult') {
+                const blob = new Blob([e.data.result], { type: 'application/octet-stream' });
+                const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `if-studio-litho-${Date.now()}.stl`; link.click(); 
+                setTimeout(() => URL.revokeObjectURL(url), 1000); 
+                showToast("STL Generated!", 'success');
+            } else {
+                showToast("Failed to generate STL.", 'error');
+            }
+        };
+
+        worker.postMessage({ 
+            type: 'stl', 
+            data: imgData, 
+            config: { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings, borderWidth }
+        }, [imgData]); 
+
+    }, [frameShape, cropAspectW, cropAspectH, modeSettings.litho, renderFrame, worker, centerHole, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings, borderWidth]);
 
     const downloadSVG = useCallback(() => { 
         if (!sourceImageRef.current || !canvasRef.current || !worker) return;
@@ -1258,43 +1397,6 @@ export default function App() {
         }, [imgData]); 
 
     }, [mode, rings, rotation, frameShape, cropAspectW, cropAspectH, centerHole, colorMode, activeLayers, fgColor, borderWidth, dotShape, lineThickness, brightness, contrast, invert, renderFrame, worker, modeSettings, is3DMode]);
-
-    const downloadSTL = useCallback(() => {
-        if (!sourceImageRef.current || !canvasRef.current || !worker) return;
-        setIsProcessing(true); showToast('Generating STL...', 'info');
-
-        const refCanvas = canvasRef.current;
-        // 1. Render the current visual state (which for litho should be grayscale output)
-        const tempCanvas = document.createElement('canvas');
-        // Use the litho resolution setting to determine export resolution
-        const maxRes = 1000 * modeSettings.litho.resolution;
-        const scaleFactor = Math.min(1, maxRes / Math.max(sourceImageRef.current.width, sourceImageRef.current.height));
-        const w = Math.floor(sourceImageRef.current.width * scaleFactor);
-        const h = Math.floor(sourceImageRef.current.height * scaleFactor);
-        tempCanvas.width = w; tempCanvas.height = h;
-        renderFrame(tempCanvas.getContext('2d'), w, h, true);
-
-        const imgData = tempCanvas.getContext('2d').getImageData(0, 0, w, h).data.buffer;
-
-        worker.onmessage = (e) => {
-            setIsProcessing(false);
-            if (e.data.type === 'stlResult') {
-                const blob = new Blob([e.data.result], { type: 'application/octet-stream' });
-                const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `if-studio-litho-${Date.now()}.stl`; link.click(); 
-                setTimeout(() => URL.revokeObjectURL(url), 1000); 
-                showToast("STL Generated!", 'success');
-            } else {
-                showToast("Failed to generate STL.", 'error');
-            }
-        };
-
-        worker.postMessage({ 
-            type: 'stl', 
-            data: imgData, 
-            config: { w, h, centerHole, frameShape, cropAspectW, cropAspectH, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings }
-        }, [imgData]); 
-
-    }, [frameShape, cropAspectW, cropAspectH, modeSettings.litho, renderFrame, worker, centerHole, mode, rings, rotation, lineThickness, dotShape, contrast, brightness, invert, colorMode, activeLayers, fgColor, is3DMode, minThickness, modeSettings]);
 
     const downloadPNG = useCallback((exportScale = 1) => {
         if (!sourceImageRef.current) return;
@@ -1411,7 +1513,7 @@ export default function App() {
                              <div className="grid grid-cols-4 gap-2 mb-4">
                                  {['c','m','y','k'].map(k => (
                                      <button key={k} onClick={() => setActiveLayersAndRecord(p => ({...p, activeLayers: {...p.activeLayers, [k]: !p.activeLayers[k]}}))} className={`flex flex-col items-center justify-center p-2 rounded-xl border-2 ${activeLayers[k] ? 'bg-white border-current' : 'bg-gray-50 border-gray-100 opacity-50'}`} style={{ color: activeLayers[k] ? (k==='k'?'#000':CMYK_COLORS[k]) : '#9ca3af', borderColor: activeLayers[k] ? (k==='y' ? '#EAB308' : (k==='k'?'#000':CMYK_COLORS[k])) : '' }}>
-                                         <span className="text-xs font-bold uppercase">{k}</span>
+                                             <span className="text-xs font-bold uppercase">{k}</span>
                                      </button>
                                  ))}
                              </div>
@@ -1427,7 +1529,8 @@ export default function App() {
                             <Slider label="Min Depth" value={modeSettings.litho.minDepth} min={0.2} max={2.0} step={0.1} onChange={(v) => updateSetting('minDepth', v)} tooltip="Thinnest part (lightest area)." onReset={handleSliderReset} resetValue={INITIAL_APP_STATE.modeSettings.litho.minDepth} settingKey="minDepth"/>
                             <Slider label="Max Depth" value={modeSettings.litho.maxDepth} min={1.0} max={6.0} step={0.1} onChange={(v) => updateSetting('maxDepth', v)} tooltip="Thickest part (darkest area)." onReset={handleSliderReset} resetValue={INITIAL_APP_STATE.modeSettings.litho.maxDepth} settingKey="maxDepth"/>
                         </div>
-                        <Slider label="Voxel Resolution" value={modeSettings.litho.resolution} min={0.1} max={1.0} step={0.1} onChange={(v) => updateSetting('resolution', v)} icon={Scaling} tooltip="Higher = better detail but larger file." onReset={handleSliderReset} resetValue={INITIAL_APP_STATE.modeSettings.litho.resolution} settingKey="resolution"/>
+                        {/* New mmPerPixel Slider */}
+                        <Slider label="Detail (mm/px)" value={modeSettings.litho.mmPerPixel || 0.15} min={0.05} max={0.4} step={0.01} onChange={(v) => updateSetting('mmPerPixel', v)} icon={Scaling} tooltip="Smaller = Higher Quality. (0.10 is standard)" onReset={handleSliderReset} resetValue={INITIAL_APP_STATE.modeSettings.litho.mmPerPixel} settingKey="mmPerPixel"/>
                     </div>
                 </>
             );
@@ -1459,6 +1562,9 @@ export default function App() {
             <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
             <LoadModal isOpen={showLoadModal} onClose={loadSavedState} onDiscard={discardSavedState}/>
             
+            {/* Add SVG Filters Definitions to DOM with Dynamic Props */}
+            <SVGFilters minDepth={modeSettings.litho.minDepth} maxDepth={modeSettings.litho.maxDepth} />
+
             {/* Mobile Header */}
             <div className="md:hidden fixed top-0 left-0 right-0 h-12 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-40">
                 <div className="flex items-center gap-2 font-bold text-gray-800 text-sm"><Activity className="text-[#3B82F6]" size={16}/> IF Studio</div>
@@ -1544,7 +1650,10 @@ export default function App() {
                             </div>
                     ) : (
                         <div className="absolute top-[5px] left-[5px] right-[5px] bottom-[5px] shadow-2xl border border-gray-200 bg-white/0 group">
-                            <canvas ref={canvasRef} className="w-full h-full object-contain" />
+                            <canvas ref={canvasRef} 
+                                className="w-full h-full object-contain" 
+                                style={{ filter: lithoPreview ? 'url(#litho-emboss)' : 'none' }} // APPLY FAKE BUMP
+                            />
                             {isProcessing && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/95 text-blue-600 px-6 py-3 rounded-full text-sm font-bold flex items-center shadow-xl animate-pulse border border-blue-100"><RefreshCw size={16} className="animate-spin mr-3" /> PROCESSING</div>}
                             
                             {/* --- CANVAS OVERLAY BUTTONS (ALWAYS VISIBLE) --- */}
