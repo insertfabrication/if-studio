@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, memo, useMemo } from '
 import { Upload, Download, RefreshCw, Sliders, Image as ImageIcon, Zap, Layers, Circle, Grid, Activity, Move, Palette, Disc, MousePointer2, Hand, Settings, Menu, X, RotateCcw, Info, Square, Triangle, Eye, EyeOff, LayoutTemplate, Droplet, Check, ArrowRight, Crop, Maximize, AlertTriangle, ShieldCheck, Printer, Megaphone, Plus, ChevronUp, ChevronDown, Share2, HelpCircle, Sparkles, Wand2, Frame, Paintbrush, Waves, Box, Ruler, Scaling, BoxSelect, Image as PhotoIcon, Dice5, Monitor, Smartphone, GripHorizontal } from 'lucide-react';
 
 /**
- * IF Studio - Ultimate Version
+ * IF Studio - Ultimate Version.
  */
 
 // --- Constants ---
@@ -45,6 +45,48 @@ const INITIAL_APP_STATE = {
 
 
 // --- Helper Components ---
+
+// New Component: Download Modal
+const DownloadModal = memo(({ isOpen, onClose, type, status }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl flex flex-col items-center text-center space-y-4 animate-in zoom-in-95 duration-200">
+                {status === 'processing' && (
+                    <>
+                        <div className="w-16 h-16 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-2" />
+                        <h3 className="text-lg font-bold text-gray-900">Generating {type}...</h3>
+                        <p className="text-sm text-gray-500">This may take a moment for high details.</p>
+                    </>
+                )}
+                {status === 'success' && (
+                    <>
+                        <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-2 animate-in zoom-in duration-300">
+                            <Check size={32} />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900">Ready!</h3>
+                        <p className="text-sm text-gray-500">Your {type} download should start automatically.</p>
+                        <button onClick={onClose} className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors mt-2">
+                            Close
+                        </button>
+                    </>
+                )}
+                {status === 'error' && (
+                    <>
+                        <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-2 animate-in zoom-in duration-300">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900">Error</h3>
+                        <p className="text-sm text-gray-500">Failed to generate {type}. Please try again.</p>
+                        <button onClick={onClose} className="w-full py-3 bg-red-50 hover:bg-red-100 text-red-600 font-bold rounded-xl transition-colors mt-2">
+                            Close
+                        </button>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+});
 
 // New Component: SVG Filters for GPU effects with Dynamic Depth Feedback
 const SVGFilters = memo(({ minDepth = 0.8, maxDepth = 3.0 }) => {
@@ -346,6 +388,7 @@ export default function App() {
     const [toast, setToast] = useState({ message: null, type: 'info' });
     const [showAbout, setShowAbout] = useState(false);
     const [showLoadModal, setShowLoadModal] = useState(false); // New modal state
+    const [downloadState, setDownloadState] = useState({ isOpen: false, type: '', status: 'idle' }); // NEW: Download Modal State
     const [isDragOver, setIsDragOver] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     
@@ -653,7 +696,8 @@ export default function App() {
             if (key === 'brightness') return { ...prev, brightness: INITIAL_APP_STATE.brightness };
             if (key === 'borderWidth') return { ...prev, borderWidth: INITIAL_APP_STATE.borderWidth };
             
-            if (key === 'rings' || key === 'thickness' || key === 'rotation' || key === 'dotShape') {
+            // UPDATED: Added litho keys to the reset logic
+            if (['rings', 'thickness', 'rotation', 'dotShape', 'widthMm', 'minDepth', 'maxDepth', 'mmPerPixel'].includes(key)) {
                 updateSetting(key, def); return prev;
             }
             return prev;
@@ -1318,7 +1362,7 @@ export default function App() {
 
     const downloadSTL = useCallback(() => {
         if (!sourceImageRef.current || !canvasRef.current || !worker) return;
-        setIsProcessing(true); showToast('Generating STL...', 'info');
+        setDownloadState({ isOpen: true, type: 'STL', status: 'processing' });
 
         const refCanvas = canvasRef.current;
         // 1. Render the current visual state (which for litho should be grayscale output)
@@ -1343,14 +1387,13 @@ export default function App() {
         const imgData = tempCanvas.getContext('2d').getImageData(0, 0, w, h).data.buffer;
 
         worker.onmessage = (e) => {
-            setIsProcessing(false);
             if (e.data.type === 'stlResult') {
                 const blob = new Blob([e.data.result], { type: 'application/octet-stream' });
                 const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `if-studio-litho-${Date.now()}.stl`; link.click(); 
                 setTimeout(() => URL.revokeObjectURL(url), 1000); 
-                showToast("STL Generated!", 'success');
+                setDownloadState(prev => ({ ...prev, status: 'success' }));
             } else {
-                showToast("Failed to generate STL.", 'error');
+                setDownloadState(prev => ({ ...prev, status: 'error' }));
             }
         };
 
@@ -1364,10 +1407,10 @@ export default function App() {
 
     const downloadSVG = useCallback(() => { 
         if (!sourceImageRef.current || !canvasRef.current || !worker) return;
-        setIsProcessing(true); showToast("Calculating Vectors...", 'info');
+        setDownloadState({ isOpen: true, type: 'SVG', status: 'processing' });
 
         const refCanvas = canvasRef.current;
-        // 1. Render the current visual state to a temporary canvas *without* view pan/zoom
+        // 1. Render the current visual state (which for litho should be grayscale output)
         const tempCanvas = document.createElement('canvas');
         // Use a reasonable, high-resolution base for vector tracing
         const w = 2048, h = 2048; // Max resolution for consistency with source image scaling logic
@@ -1378,15 +1421,14 @@ export default function App() {
         const imgData = tempCanvas.getContext('2d').getImageData(0, 0, w, h).data.buffer;
 
         worker.onmessage = (e) => {
-            setIsProcessing(false);
             if (e.data.type === 'svgResult') {
                 const svgContent = e.data.result;
                 const blob = new Blob([svgContent], {type: 'image/svg+xml'});
                 const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `if-studio-${Date.now()}.svg`; link.click(); 
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
-                showToast("SVG Generated!", 'success');
+                setDownloadState(prev => ({ ...prev, status: 'success' }));
             } else {
-                showToast("SVG Gen Error", 'error');
+                setDownloadState(prev => ({ ...prev, status: 'error' }));
             }
         };
 
@@ -1400,7 +1442,7 @@ export default function App() {
 
     const downloadPNG = useCallback((exportScale = 1) => {
         if (!sourceImageRef.current) return;
-        setIsProcessing(true);
+        setDownloadState({ isOpen: true, type: 'PNG', status: 'processing' });
         setTimeout(() => {
             try {
                 const img = sourceImageRef.current;
@@ -1415,9 +1457,10 @@ export default function App() {
                 // exportCanvas.toDataURL('image/png') preserves the canvas's transparency (which renderFrame ensures)
                 link.href = exportCanvas.toDataURL('image/png');
                 link.click();
-                showToast("PNG Exported!", 'success');
-            } catch(e) { showToast("Export failed.", 'error'); } 
-            finally { setIsProcessing(false); }
+                setDownloadState(prev => ({ ...prev, status: 'success' }));
+            } catch(e) { 
+                setDownloadState(prev => ({ ...prev, status: 'error' }));
+            } 
         }, 100);
     }, [renderFrame]);
         
@@ -1561,6 +1604,7 @@ export default function App() {
             <StatusToast toast={toast} onClose={() => setToast({ message: null, type: 'info' })} />
             <AboutModal isOpen={showAbout} onClose={() => setShowAbout(false)} />
             <LoadModal isOpen={showLoadModal} onClose={loadSavedState} onDiscard={discardSavedState}/>
+            <DownloadModal isOpen={downloadState.isOpen} onClose={() => setDownloadState(prev => ({...prev, isOpen: false}))} type={downloadState.type} status={downloadState.status} />
             
             {/* Add SVG Filters Definitions to DOM with Dynamic Props */}
             <SVGFilters minDepth={modeSettings.litho.minDepth} maxDepth={modeSettings.litho.maxDepth} />
@@ -1654,7 +1698,7 @@ export default function App() {
                                 className="w-full h-full object-contain" 
                                 style={{ filter: lithoPreview ? 'url(#litho-emboss)' : 'none' }} // APPLY FAKE BUMP
                             />
-                            {isProcessing && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white/95 text-blue-600 px-6 py-3 rounded-full text-sm font-bold flex items-center shadow-xl animate-pulse border border-blue-100"><RefreshCw size={16} className="animate-spin mr-3" /> PROCESSING</div>}
+                            {/* Removed previous spinner overlay here, as DownloadModal now handles it */}
                             
                             {/* --- CANVAS OVERLAY BUTTONS (ALWAYS VISIBLE) --- */}
                             {step === 'edit' && (
